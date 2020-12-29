@@ -1,5 +1,13 @@
 /* run_harness.js */
-var print = console.log;
+
+function do_print()
+{
+  if (typeof print === 'function') {
+    print.apply(null, arguments)
+  } else {
+    console.log.apply(null, arguments)
+  }
+}
 
 function Run() {
   BenchmarkSuite.RunSuites({ NotifyStep: ShowProgress,
@@ -11,28 +19,28 @@ function Run() {
 var harnessErrorCount = 0;
 
 function ShowProgress(name) {
-  print('PROGRESS', name);
+  do_print('PROGRESS', name);
 }
 
 function AddError(name, error) {
-  print('ERROR', name, error);
-  print(error.stack);
+  do_print('ERROR', name, error);
+  do_print(error.stack);
   harnessErrorCount++;
 }
 
 function AddResult(name, result) {
-  print('RESULT', name, result);
+  do_print('RESULT', name, result);
 }
 
 function AddScore(score) {
-  print('SCORE', score);
+  do_print('SCORE', score);
 }
 
 try {
   Run();
 } catch (e) {
-  print('*** Run() failed');
-  print(e.stack || e);
+  do_print('*** Run() failed');
+  do_print(e.stack || e);
 }
 
 if (harnessErrorCount > 0) {
