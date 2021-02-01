@@ -38,10 +38,44 @@
 extern "C" {
 #endif
 
+struct qjs_timezone {
+    int tz_minuteswest;     /* minutes west of Greenwich */
+    int tz_dsttime;         /* type of DST correction */
+};
+
 struct qjs_timeval {
     int64_t tv_sec;         /* seconds */
     long    tv_usec;        /* and microseconds */
 };
+
+typedef int qjs_dev_t;
+typedef int qjs_ino_t;
+typedef int qjs_mode_t;
+typedef int qjs_nlink_t;
+typedef int qjs_uid_t;
+typedef int qjs_gid_t;
+typedef uint64_t qjs_blksize_t;
+typedef uint64_t qjs_blkcnt_t;
+typedef uint64_t qjs_off_t;
+
+struct qjs_stat
+{
+    qjs_dev_t     st_dev;         /* ID of device containing file */
+    qjs_ino_t     st_ino;         /* Inode number */
+    qjs_mode_t    st_mode;        /* File type and mode */
+    qjs_nlink_t   st_nlink;       /* Number of hard links */
+    qjs_uid_t     st_uid;         /* User ID of owner */
+    qjs_gid_t     st_gid;         /* Group ID of owner */
+    qjs_dev_t     st_rdev;        /* Device ID (if special file) */
+    qjs_off_t     st_size;         /* Total size, in bytes */
+    qjs_blksize_t st_blksize;     /* Block size for filesystem I/O */
+    qjs_blkcnt_t  st_blocks;      /* Number of 512B blocks allocated */
+
+    struct qjs_timeval st_atim;  /* Time of last access */
+    struct qjs_timeval st_mtim;  /* Time of last modification */
+    struct qjs_timeval st_ctim;  /* Time of last status change */
+};
+
 
 //! @brief The thread method.
 typedef void (*qjs_thread_method)(void *);
