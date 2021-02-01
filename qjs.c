@@ -156,13 +156,7 @@ static inline size_t js_trace_malloc_usable_size(void *ptr)
 #endif
 }
 
-static void
-#ifdef _WIN32
-/* mingw printf is used */
-__attribute__((format(gnu_printf, 2, 3)))
-#else
-__attribute__((format(printf, 2, 3)))
-#endif
+static void __js_printf_like(2, 3)
     js_trace_malloc_printf(JSMallocState *s, const char *fmt, ...)
 {
     va_list ap;
