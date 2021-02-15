@@ -1,0 +1,110 @@
+name: quickjs CI
+
+on: [push, pull_request]
+
+jobs:
+  "Linux-GCC":
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { env: x86_64, buildType: Debug }
+          - { env: x86_64, buildType: Release }
+          - { env: i686, buildType: Debug }
+          - { env: i686, buildType: Release }
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          export CC=${{matrix.env}}-linux-gnu-gcc
+          export CXX=${{matrix.env}}-linux-gnu-g++
+          sudo bash ./tools/ci-install-linux-${{matrix.env}}.sh
+          mkdir build
+          cd build
+          cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=${{matrix.buildType}}
+          cmake --build .
+          ctest --verbose -j3
+
+  "OSX-x86-64":
+    runs-on: macos-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { buildType: Debug }
+          - { buildType: Release }
+    steps:
+      - run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          cmake --version
+      - uses: actions/checkout@v2
+      - run: |
+          mkdir build
+          cd build
+          cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=${{matrix.buildType}}
+          cmake --build .
+          ctest --verbose --timeout 1500
+
+  "Windows-MSVC":
+    runs-on: windows-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { env: amd64_x86, buildType: Debug }
+          - { env: amd64_x86, buildType: Release }
+          - { env: amd64, buildType: Debug }
+          - { env: amd64, buildType: Release }
+    steps:
+      - run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          Start-BitsTransfer -Source https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip -Destination ninja-win.zip
+          Expand-Archive -LiteralPath ninja-win.zip
+          Move-Item ninja-win\ninja.exe C:\Windows
+          cmake --version
+          ninja --version
+      - uses: actions/checkout@v2
+      - run: |
+          Install-Module Pscx -Scope CurrentUser -Force -AllowClobber
+          Invoke-BatchFile "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" ${{matrix.env}}
+          mkdir build
+          cd build
+          cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=${{matrix.buildType}}
+          cmake --build .
+          ctest --verbose --timeout 2000
+
+  "Windows-MSYS2":
+    runs-on: windows-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { sys: mingw64, env: x86_64, buildType: Debug }
+          - { sys: mingw32, env: i686, buildType: Release }
+          - { sys: ucrt64, env: ucrt-x86_64, buildType: Debug }
+          - { sys: clang64, env: clang-x86_64, buildType: Release }
+    steps:
+      - run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          Start-BitsTransfer -Source https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip -Destination ninja-win.zip
+          Expand-Archive -LiteralPath ninja-win.zip
+          Move-Item ninja-win\ninja.exe C:\Windows
+          cmake --version
+          ninja --version
+      - uses: actions/checkout@v2
+      - uses: msys2/setup-msys2@v2
+        with:
+          path-type: inherit
+          msystem: ${{matrix.sys}}
+          install: >-
+            mingw-w64-${{matrix.env}}-toolchain
+      - run: |
+          $env:Path = "D:/a/_temp/msys/msys64/${{matrix.sys}}/bin/;$env:Path"
+          mkdir build
+          cd build
+          cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=${{matrix.buildType}}
+          cmake --build .
+          ctest --verbose --timeout 1300 -j1
