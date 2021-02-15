@@ -1,0 +1,144 @@
+name: quickjs CI
+
+on: [push, pull_request]
+
+jobs:
+  "Linux-x86-64-Release":
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+            cmake --version
+      - uses: actions/checkout@v2
+      - run: |
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Release
+            cmake --build .
+            ctest --verbose
+
+  "Linux-x86-64-Debug":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+            cmake --build .
+            ctest --verbose
+
+  "Linux-x86-Release":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+            export CC=i686-linux-gnu-gcc
+            export CXX=i686-linux-gnu-g++
+            sudo bash ./tools/ci-install-linux-x86.sh
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Release
+            cmake --build .
+            ctest --verbose
+
+  "Linux-x86-Debug":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+            export CC=i686-linux-gnu-gcc
+            export CXX=i686-linux-gnu-g++
+            sudo bash ./tools/ci-install-linux-x86.sh
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+            cmake --build .
+            ctest --verbose
+
+  "OSX-x86-64-Release":
+    runs-on: macos-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+            cmake --version
+      - uses: actions/checkout@v2
+      - run: |
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Release
+            cmake --build .
+            ctest --verbose
+
+  "OSX-x86-64-Debug":
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+            mkdir build && cd build
+            cmake .. -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+            cmake --build .
+            ctest --verbose
+
+
+  "Windows-x86_64-Release":
+    runs-on: windows-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+      - uses: actions/checkout@v2
+      - uses: seanmiddleditch/gha-setup-ninja@master
+      - run: |
+            Install-Module Pscx -Scope CurrentUser -Force -AllowClobber
+            Invoke-BatchFile "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64_x86
+            mkdir build && cd build
+            cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Release
+            cmake --build .
+            ctest --verbose
+
+  "Windows-x86_64-Debug":
+    runs-on: windows-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+            cmake --version
+      - uses: actions/checkout@v2
+      - uses: seanmiddleditch/gha-setup-ninja@master
+      - run: |
+            Install-Module Pscx -Scope CurrentUser -Force -AllowClobber
+            Invoke-BatchFile "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64_x86
+            mkdir build && cd build
+            cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+            cmake --build .
+            ctest --verbose
+
+  "Windows-x86-Release":
+    runs-on: windows-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+      - uses: actions/checkout@v2
+      - uses: seanmiddleditch/gha-setup-ninja@master
+      - run: |
+            Install-Module Pscx -Scope CurrentUser -Force -AllowClobber
+            Invoke-BatchFile "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64_x86
+            mkdir build && cd build
+            cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Release
+            cmake --build .
+            ctest --verbose  -C Release
+
+  "Windows-x86-Debug":
+    runs-on: windows-latest
+    steps:
+      - run: |
+            git config --global core.autocrlf false
+            git config --global core.eol lf
+      - uses: actions/checkout@v2
+      - uses: seanmiddleditch/gha-setup-ninja@master
+      - run: |
+            Install-Module Pscx -Scope CurrentUser -Force -AllowClobber
+            Invoke-BatchFile "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64_x86
+            mkdir build && cd build
+            cmake .. "-GNinja" -DQUICKJS_ENABLE_SLOW_TEST=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+            cmake --build .
+            ctest --verbose  -C Debug

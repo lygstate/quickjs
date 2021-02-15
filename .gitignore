@@ -1,0 +1,5 @@
+build/
+unicode/
+.obj/
+test262o/
+test262/
