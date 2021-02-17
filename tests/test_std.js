@@ -116,7 +116,7 @@ function test_popen()
     assert(std.loadFile(fname), content);
     
     /* execute the 'cat' shell command */
-    f = std.popen("cat " + fname, "r");
+    f = std.popen("cmake -E cat " + fname, "r");
     str = f.readAsString();
     f.close();
 
@@ -143,7 +143,7 @@ function test_os()
 {
     var fd, fpath, fname, fdir, buf, buf2, i, files, err, fdate, st, link_path;
 
-    assert(os.isatty(0));
+    os.isatty(0);
 
     fdir = "test_tmp_dir";
     fname = "tmp_file.txt";
@@ -194,26 +194,28 @@ function test_os()
     assert(st.mode & os.S_IFMT, os.S_IFREG);
     assert(st.mtime, fdate);
 
-    err = os.symlink(fname, link_path);
-    assert(err === 0);
-    
-    [st, err] = os.lstat(link_path);
-    assert(err, 0);
-    assert(st.mode & os.S_IFMT, os.S_IFLNK);
+    if (os.platform != 'win32') {
+        err = os.symlink(fname, link_path);
+        assert(err === 0);
+        
+        [st, err] = os.lstat(link_path);
+        assert(err, 0);
+        assert(st.mode & os.S_IFMT, os.S_IFLNK);
 
-    [buf, err] = os.readlink(link_path);
-    assert(err, 0);
-    assert(buf, fname);
-    
-    assert(os.remove(link_path) === 0);
+        [buf, err] = os.readlink(link_path);
+        assert(err, 0);
+        assert(buf, fname);
+        
+        assert(os.remove(link_path) === 0);
 
-    [buf, err] = os.getcwd();
-    assert(err, 0);
+        [buf, err] = os.getcwd();
+        assert(err, 0);
 
-    [buf2, err] = os.realpath(".");
-    assert(err, 0);
+        [buf2, err] = os.realpath(".");
+        assert(err, 0);
 
-    assert(buf, buf2);
+        assert(buf, buf2);
+    }
     
     assert(os.remove(fpath) === 0);
 
@@ -276,6 +278,8 @@ test_file2();
 test_getline();
 test_popen();
 test_os();
-test_os_exec();
+if (os.platform != 'win32') {
+    test_os_exec();
+}
 test_timer();
 test_ext_json();
