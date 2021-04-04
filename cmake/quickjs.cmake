@@ -35,6 +35,8 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/pal-port-shared.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport.c
 )
 
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "General")
@@ -46,10 +48,12 @@ else()
     target_sources(quickjs PRIVATE
       ${QUICKJS_SOURCE_DIR}/pal-port-win.c
       ${QUICKJS_SOURCE_DIR}/win/msvc_stdatomic.c
+      ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-win.c
     )
   else()
     target_sources(quickjs PRIVATE
       ${QUICKJS_SOURCE_DIR}/pal-port-unix.c
+      ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-unix.c
     )
   endif()
 endif()
