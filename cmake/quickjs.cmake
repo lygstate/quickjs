@@ -33,7 +33,19 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libunicode.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport.c
 )
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+  target_sources(quickjs PRIVATE
+    ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-win.c
+  )
+else()
+  target_sources(quickjs PRIVATE
+    ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-unix.c
+  )
+endif()
+
 qjs_setup_common_flags(quickjs)
 add_library(quickjs::quickjs ALIAS quickjs)
 set_target_properties(quickjs PROPERTIES
