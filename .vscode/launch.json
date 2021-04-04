@@ -1,0 +1,300 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/build/GCC-Debug-linux-x64/run-test262",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb",
+            "console": "integratedTerminal",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "type": "quickjs",
+            "request": "launch",
+            "name": "Launch QuickJS",
+            "runtimeExecutable": "${workspaceFolder}/build/MSVC-Release-win32-x86/qjs",
+            // "trace": true,
+            "program": "${workspaceFolder}/test.js"
+        },
+        {
+            "name": "quickjs cpp Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/qjs",
+            "args": [
+                "test.js"
+            ],
+            "cwd": "${workspaceFolder}",
+            "externalConsole": true,
+            "environment": [
+                {
+                    "name": "QUICKJS_DEBUG_ADDRESS",
+                    "value": "127.0.0.1:5555"
+                }
+            ]
+        },
+        {
+            "type": "quickjs",
+            "request": "attach",
+            "name": "Attach QuickJS",
+            "localRoot": "${workspaceFolder}/",
+            "mode": "listen",
+            "port": 5555
+        },
+        {
+            "name": "(win32/gdb) x64 启动单个测试用例",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-win32-x64/run-test262",
+            "args": [
+                "-c",
+                "test262.conf",
+                "-f",
+                "test262/test/built-ins/Number/prototype/toExponential/return-values.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Windows) 启动 GCC x64",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-win32-x64/run-test262",
+            "args": [
+                "-u",
+                "-c",
+                "test262.conf",
+                "-a"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Linux) 启动 GCC x64",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-linux-x64/run-test262",
+            "args": [
+                "-m",
+                "-c",
+                "test262.conf",
+                "-a"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Windows) 启动 MSVC x64",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/run-test262",
+            "args": [
+                "-u",
+                "-c",
+                "test262.conf",
+                "-a"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "(Windows) 启动 MSVC x86",
+            "type": "cppvsdbg",
+            "request": "launch",
+            // "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/run-test262",
+            "program": "${workspaceFolder}/build/MSVC-Release-win32-x86/run-test262",
+            "args": [
+                "-u",
+                "-c",
+                "test262.conf",
+                "-a"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "(Windows MSVC) 启动单个测试用例 x86",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/run-test262",
+            "args": [
+                "-c",
+                "test262.conf",
+                "-f",
+                "test262/test/built-ins/Atomics/or/bigint/good-views.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "(Windows MSVC) 启动单个测试用例 x64",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/run-test262",
+            "args": [
+                "-c",
+                "test262.conf",
+                "-f",
+                // "test262/test/built-ins/Atomics/or/bigint/good-views.js",
+                "test262/test/built-ins/Atomics/notify/bigint/notify-all-on-loc.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "(Windows) 启动 qjsc",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/quickjs-host/Debug/build/qjsc.exe",
+            "args": [
+                "-c",
+                "-o",
+                "${workspaceFolder}/build/MSVC-Debug-win32-x64/repl.c",
+                "-m",
+                "${workspaceFolder}/repl.js"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "(Windows MSVC) 启动 qjs",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/qjs.exe",
+            "args": [
+                //"--bignum",
+                //"--qjscalc",
+                // "${workspaceFolder}/build/MSVC-Debug-win32-x64/tests/test_point.js",
+                // "tests/test_worker.js",
+                // "tests/test_qjscalc.js",
+                "tests/test_std.js",
+                // "build/MSVC-Debug-win32-x64/tests/combined.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "(Windows GCC) 启动 qjs",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-win32-x64/qjs.exe",
+            "args": [
+                //"--bignum",
+                //"--qjscalc",
+                // "${workspaceFolder}/build/GCC-Debug-win32-x64/tests/test_point.js",
+                // "tests/test_worker.js",
+                // "tests/test_qjscalc.js",
+                "tests/test_std.js",
+                // "build/GCC-Debug-win32-x64/tests/combined.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+        },
+        {
+            "name": "(Linux GCC) 启动 qjs",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-linux-x64/qjs",
+            "args": [
+                //"--bignum",
+                //"--qjscalc",
+                // "${workspaceFolder}/build/GCC-Debug-linux-x64/tests/test_point.js",
+                // "tests/test_worker.js",
+                // "tests/test_qjscalc.js",
+                "tests/test_std.js",
+                // "build/GCC-Debug-linux-x64/tests/combined.js"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Windows GCC x86) 启动 qjsc",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-win32-x86/qjsc.exe",
+            "args": [
+                "-fbignum",
+                "-c",
+                "-o",
+                "qjscalc.c",
+                "qjscalc.js"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+        }
+    ]
+}
