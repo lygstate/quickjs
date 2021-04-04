@@ -173,11 +173,15 @@ QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(
 QJS_LIB_OBJS+=$(OBJDIR)/cwalk.o
 QJS_LIB_OBJS+=$(OBJDIR)/pal-port-hosted.o
 QJS_LIB_OBJS+=$(OBJDIR)/pal-port-shared.o
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport.c
 ifndef CONFIG_WIN32
 QJS_LIB_OBJS+=$(OBJDIR)/pal-port-unix.o
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
 else
 QJS_LIB_OBJS+=$(OBJDIR)/pal-port-win.o
 QJS_LIB_OBJS+=$(OBJDIR)/win/msvc_stdatomic.c
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
 endif
 
 QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(QJS_LIB_OBJS)
