@@ -1,0 +1,24 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "run js debugger",
+            "type": "process",
+            "windows": {
+                "options": {
+                    "env": {
+                        "QUICKJS_DEBUG_ADDRESS": "127.0.0.1:5555"
+                    }
+                },
+                "command": "${workspaceFolder}/build/MSVC-Debug-win32-x86/qjs.exe"
+            },
+            "command": "${workspaceFolder}/build/GNU-Debug-linux-x86/qjs",
+            "args": [
+                "test.js"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
