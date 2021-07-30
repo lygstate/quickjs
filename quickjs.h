@@ -28,6 +28,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+  #define JS_EXPORT __declspec(dllexport)
+#else
+  #define JS_EXPORT /* nothing */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
