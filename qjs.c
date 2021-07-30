@@ -326,6 +326,14 @@ int main(int argc, char **argv)
         const char *p, *exename;
         exename = argv[0];
         p = strrchr(exename, '/');
+#ifdef _WIN32
+        {
+            const char *q = strrchr(exename, '\\');
+            if (p == NULL || q > p) {
+                p = q;
+            }
+        }
+#endif
         if (p)
             exename = p + 1;
         load_jscalc = !strcmp(exename, "qjscalc");
