@@ -564,18 +564,32 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     return 0;
 }
 
+#if defined(_WIN32)
+#define NATIVE_LIBRARY_SUFFIX ".dll"
+#elif defined(__APPLE__)
+#define NATIVE_LIBRARY_SUFFIX ".dylib"
+#else
+#define NATIVE_LIBRARY_SUFFIX ".so"
+#endif
 JSModuleDef *js_module_loader(JSContext *ctx,
                               const char *module_name, void *opaque)
 {
-    JSModuleDef *m;
+    JSModuleDef *m = NULL;
+    char *module_name_dup = strdup(module_name);
+    if (has_suffix(module_name_dup, ".module"))
+    {
+        size_t module_name_len = strlen(module_name_dup);
+        strcpy(module_name_dup + (module_name_len - strlen(".module")), NATIVE_LIBRARY_SUFFIX);
+    }
 
-    if (has_suffix(module_name, ".so")) {
-        m = js_module_loader_so(ctx, module_name);
+    if (has_suffix(module_name_dup, NATIVE_LIBRARY_SUFFIX)) {
+        m = js_module_loader_so(ctx, module_name_dup);
+        free(module_name_dup);
     } else {
         size_t buf_len;
         uint8_t *buf;
         JSValue func_val;
-
+        free(module_name_dup);
         buf = js_load_file(ctx, &buf_len, module_name);
         if (!buf) {
             JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
