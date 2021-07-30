@@ -6556,7 +6556,7 @@ int bfdec_normalize_and_round(bfdec_t *r, limb_t prec1, bf_flags_t flags)
 int bfdec_set_ui(bfdec_t *r, uint64_t v)
 {
 #if LIMB_BITS == 32
-    if (v >= BF_DEC_BASE * BF_DEC_BASE) {
+    if (v >= ((uint64_t)(BF_DEC_BASE)) * BF_DEC_BASE) {
         if (bfdec_resize(r, 3))
             goto fail;
         r->tab[0] = v % BF_DEC_BASE;
