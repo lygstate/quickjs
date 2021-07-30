@@ -424,6 +424,15 @@ static JSValue js_evalScript(JSContext *ctx, JSValue this_val,
     return ret;
 }
 
+static JSValue add_helpers1(JSContext *ctx);
+static void add_helpers(JSContext *ctx);
+static int64_t get_clock_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+}
+
 #ifdef CONFIG_AGENT
 
 #include <pthread.h>
@@ -444,9 +453,6 @@ typedef struct {
     struct list_head link;
     char *str;
 } AgentReport;
-
-static JSValue add_helpers1(JSContext *ctx);
-static void add_helpers(JSContext *ctx);
 
 static pthread_mutex_t agent_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t agent_cond = PTHREAD_COND_INITIALIZER;
@@ -653,13 +659,6 @@ static JSValue js_agent_sleep(JSContext *ctx, JSValue this_val,
         return JS_EXCEPTION;
     usleep(duration * 1000);
     return JS_UNDEFINED;
-}
-
-static int64_t get_clock_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 }
 
 static JSValue js_agent_monotonicNow(JSContext *ctx, JSValue this_val,
