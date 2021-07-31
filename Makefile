@@ -1,6 +1,6 @@
 #
 # QuickJS Javascript Engine
-# 
+#
 # Copyright (c) 2017-2021 Fabrice Bellard
 # Copyright (c) 2017-2021 Charlie Gordon
 #
@@ -170,7 +170,7 @@ QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(
 
 QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(QJS_LIB_OBJS)
 ifdef CONFIG_BIGNUM
-QJS_LIB_OBJS+=$(OBJDIR)/libbf.o 
+QJS_LIB_OBJS+=$(OBJDIR)/libbf.o
 QJS_OBJS+=$(OBJDIR)/qjscalc.o
 endif
 
@@ -358,11 +358,11 @@ examples/point.so: $(OBJDIR)/examples/point.pic.o
 ###############################################################################
 # documentation
 
-DOCS=doc/quickjs.pdf doc/quickjs.html doc/jsbignum.pdf doc/jsbignum.html 
+DOCS=doc/quickjs.pdf doc/quickjs.html doc/jsbignum.pdf doc/jsbignum.html
 
 build_doc: $(DOCS)
 
-clean_doc: 
+clean_doc:
 	rm -f $(DOCS)
 
 doc/%.pdf: doc/%.texi
