@@ -268,8 +268,13 @@ void help(void)
     exit(1);
 }
 
-int main(int argc, char **argv)
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **_argv, wchar_t **_envp)
+#else
+int main(int argc, char **_argv, char **_envp)
+#endif
 {
+    char **argv;
     JSRuntime *rt;
     JSContext *ctx;
     struct trace_malloc_data trace_data = { NULL };
@@ -290,6 +295,8 @@ int main(int argc, char **argv)
 #endif
     size_t stack_size = 0;
 
+    pal_initialize(argc, (void**)_argv, (void**)_envp, true);
+    argv = pal_process_info_get()->argv;
     JS_Initialize();
 #ifdef CONFIG_BIGNUM
     /* load jscalc runtime if invoked as 'qjscalc' */
