@@ -240,6 +240,7 @@ typedef struct {
 struct JSRuntime {
     JSMallocFunctions mf;
     JSMallocState malloc_state;
+    pal_session_t *pal;
     const char *rt_info;
 
     int atom_hash_size; /* power of two */
@@ -1277,6 +1278,15 @@ void JS_Finalize(void)
 #ifdef CONFIG_ATOMICS
     pal_mutex_destroy(&js_atomics_mutex);
 #endif
+    pal_finalize();
+}
+
+pal_session_t *JS_GetPal(JSContext *ctx)
+{
+    if (ctx == NULL) {
+        return pal_global();
+    }
+    return ctx->rt->pal;
 }
 
 static void js_trigger_gc(JSRuntime *rt, size_t size)
@@ -1622,6 +1632,7 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
     }
     rt->malloc_state = ms;
     rt->malloc_gc_threshold = 256 * 1024;
+    rt->pal = pal_opensession();
 
 #ifdef CONFIG_BIGNUM
     bf_context_init(&rt->bf_ctx, js_bf_realloc, rt);
@@ -1900,6 +1911,7 @@ void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
 
 void JS_FreeRuntime(JSRuntime *rt)
 {
+    pal_closesession(rt->pal);
     js_debugger_free(rt, &rt->debugger_info);
 
     struct list_head *el, *el1;

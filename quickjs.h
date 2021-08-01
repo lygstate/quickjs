@@ -52,6 +52,7 @@ extern "C" {
 
 #define JS_BOOL int
 
+typedef struct pal_session_t pal_session_t;
 typedef struct JSRuntime JSRuntime;
 typedef struct JSContext JSContext;
 typedef struct JSObject JSObject;
@@ -340,6 +341,7 @@ typedef struct JSGCObjectHeader JSGCObjectHeader;
 /* These pair of function should be called at the very beginning and the very end */
 void JS_Initialize(void);
 void JS_Finalize(void);
+pal_session_t *JS_GetPal(JSContext *ctx);
 JSRuntime *JS_NewRuntime(void);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
