@@ -6,6 +6,7 @@ message(STATUS "${QUICKJS_SOURCE_DIR}/VERSION ${CONFIG_VERSION}")
 string(REGEX REPLACE "\n$" "" CONFIG_VERSION "${CONFIG_VERSION}")
 
 function(qjs_setup_common_flags target)
+  set(QJS_IS_ANSI ${ARGV1})
   target_compile_definitions(${target} PRIVATE
     CONFIG_VERSION="${CONFIG_VERSION}"
     CONFIG_BIGNUM="${CONFIG_BIGNUM}"
@@ -19,6 +20,9 @@ function(qjs_setup_common_flags target)
     target_link_options(${target} PRIVATE -STACK:16777216)
   else()
     target_compile_options(${target} PRIVATE -fPIC)
+  endif()
+  if(MINGW AND "${QJS_IS_ANSI}" STREQUAL "")
+    target_link_options(${target} PRIVATE -municode)
   endif()
   if (MSVC_VERSION GREATER 1927)
     target_compile_features(${target} PUBLIC c_std_11)
@@ -82,7 +86,7 @@ add_executable(unicode_gen
   ${QUICKJS_SOURCE_DIR}/unicode_gen.c
   ${QUICKJS_SOURCE_DIR}/cutils.c
 )
-qjs_setup_common_flags(unicode_gen)
+qjs_setup_common_flags(unicode_gen ON)
 
 add_executable(run-test262
   ${QUICKJS_SOURCE_DIR}/run-test262.c

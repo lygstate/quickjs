@@ -513,8 +513,13 @@ int get_opt_arg(char **argv, int *optind, const char *expect, const char** optar
     return 0;
 }
 
-int main(int argc, char **argv)
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **_argv, wchar_t **_envp)
+#else
+int main(int argc, char **_argv, char **_envp)
+#endif
 {
+    char **argv;
     int i, verbose;
     const char *out_filename, *cname;
     char cfilename[1024];
@@ -531,6 +536,8 @@ int main(int argc, char **argv)
     namelist_t dynamic_module_list;
     int optind = 1;
 
+    pal_initialize(argc, (void**)_argv, (void**)_envp, true);
+    argv = pal_process_info_get()->argv;
     JS_Initialize();
     out_filename = NULL;
     output_type = OUTPUT_EXECUTABLE;
