@@ -531,6 +531,7 @@ int main(int argc, char **argv)
     namelist_t dynamic_module_list;
     int optind = 1;
 
+    JS_Initialize();
     out_filename = NULL;
     output_type = OUTPUT_EXECUTABLE;
     cname = NULL;
@@ -772,6 +773,7 @@ int main(int argc, char **argv)
 
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    JS_Finalize();
 
     fclose(fo);
 
