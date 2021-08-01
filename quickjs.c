@@ -3989,7 +3989,7 @@ JSValue JS_NewAtomString(JSContext *ctx, const char *str)
 /* return (NULL, 0) if exception. */
 /* return pointer into a JSString with a live ref_count */
 /* cesu8 determines if non-BMP1 codepoints are encoded as 1 or 2 utf-8 sequences */
-const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BOOL cesu8)
+char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BOOL cesu8)
 {
     JSValue val;
     JSString *str, *str_new;
@@ -4007,7 +4007,7 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
     str = JS_VALUE_GET_STRING(val);
     len = str->len;
     if (!str->is_wide_char) {
-        const uint8_t *src = str->u.str8;
+        uint8_t *src = str->u.str8;
         int count;
 
         /* count the number of non-ASCII characters */
@@ -4023,7 +4023,7 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
         if (count == 0) {
             if (plen)
                 *plen = len;
-            return (const char *)src;
+            return (char *)src;
         }
         str_new = js_alloc_string(ctx, len + count, 0);
         if (!str_new)
@@ -4079,7 +4079,7 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
     JS_FreeValue(ctx, val);
     if (plen)
         *plen = str_new->len;
-    return (const char *)str_new->u.str8;
+    return (char *)str_new->u.str8;
  fail:
     if (plen)
         *plen = 0;
