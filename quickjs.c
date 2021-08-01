@@ -73,12 +73,6 @@
 #define CONFIG_ATOMICS
 #endif
 
-#if !defined(EMSCRIPTEN)
-/* enable stack limitation */
-#define CONFIG_STACK_CHECK
-#endif
-
-
 /* dump object free */
 //#define DUMP_FREE
 //#define DUMP_CLOSURE
@@ -1591,34 +1585,15 @@ static void set_dummy_numeric_ops(JSNumericOperations *ops)
 
 #endif /* CONFIG_BIGNUM */
 
-#if !defined(CONFIG_STACK_CHECK)
-/* no stack limitation */
-static inline uintptr_t js_get_stack_pointer(void)
-{
-    return 0;
-}
-
 static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 {
-    return FALSE;
-}
-#else
-/* Note: OS and CPU dependent */
-static inline uintptr_t js_get_stack_pointer(void)
-{
-    return (uintptr_t)__builtin_frame_address(0);
-}
-
-static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
-{
-    uintptr_t sp = js_get_stack_pointer();
+    uintptr_t sp = pal_get_stack_pointer();
     /* XXX: May need add check that make sure
        alloca_size < rt->stack_size,
        so that rt->stack_limit + alloca_size won't overflow */
     uintptr_t sp_lowest = rt->stack_limit + alloca_size;
     return unlikely(sp < sp_lowest);
 }
-#endif
 
 JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
 {
@@ -2396,7 +2371,7 @@ void JS_SetMaxStackSize(JSRuntime *rt, size_t stack_size)
 
 void JS_UpdateStackTop(JSRuntime *rt)
 {
-    rt->stack_top = js_get_stack_pointer();
+    rt->stack_top = pal_get_stack_pointer();
     update_stack_limit(rt);
 }
 
