@@ -337,6 +337,9 @@ typedef struct JSMallocFunctions {
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
 
+/* These pair of function should be called at the very beginning and the very end */
+void JS_Initialize(void);
+void JS_Finalize(void);
 JSRuntime *JS_NewRuntime(void);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);

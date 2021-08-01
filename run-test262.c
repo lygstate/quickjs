@@ -37,9 +37,7 @@
 #include "quickjs-libc.h"
 
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
-#if !defined(_MSC_VER)
 #define CONFIG_AGENT
-#endif
 
 #define CMD_NAME "run-test262"
 
@@ -434,11 +432,9 @@ static int64_t get_clock_ms(void)
 
 #ifdef CONFIG_AGENT
 
-#include <pthread.h>
-
 typedef struct {
     struct list_head link;
-    pthread_t tid;
+    pal_thread tid;
     char *script;
     JSValue broadcast_func;
     BOOL broadcast_pending;
@@ -453,12 +449,12 @@ typedef struct {
     char *str;
 } AgentReport;
 
-static pthread_mutex_t agent_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t agent_cond = PTHREAD_COND_INITIALIZER;
+static pal_mutex agent_mutex = NULL;
+static pal_condition agent_cond = NULL;
 /* list of Test262Agent.link */
 static struct list_head agent_list = LIST_HEAD_INIT(agent_list);
 
-static pthread_mutex_t report_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pal_mutex report_mutex = NULL;
 /* list of AgentReport.link */
 static struct list_head report_list = LIST_HEAD_INIT(report_list);
 
@@ -504,15 +500,15 @@ static void *agent_start(void *arg)
             } else {
                 JSValue args[2];
 
-                pthread_mutex_lock(&agent_mutex);
+                pal_mutex_lock(&agent_mutex);
                 while (!agent->broadcast_pending) {
-                    pthread_cond_wait(&agent_cond, &agent_mutex);
+                    pal_condition_wait(&agent_cond, &agent_mutex);
                 }
 
                 agent->broadcast_pending = FALSE;
-                pthread_cond_signal(&agent_cond);
+                pal_condition_signal(&agent_cond);
 
-                pthread_mutex_unlock(&agent_mutex);
+                pal_mutex_unlock(&agent_mutex);
 
                 args[0] = JS_NewArrayBuffer(ctx, agent->broadcast_sab_buf,
                                             agent->broadcast_sab_size,
@@ -556,7 +552,7 @@ static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
     agent->script = strdup(script);
     JS_FreeCString(ctx, script);
     list_add_tail(&agent->link, &agent_list);
-    pthread_create(&agent->tid, NULL, agent_start, agent);
+    pal_thread_create(&agent->tid, agent_start, agent, 0);
     return JS_UNDEFINED;
 }
 
@@ -567,7 +563,7 @@ static void js_agent_free(JSContext *ctx)
 
     list_for_each_safe(el, el1, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
-        pthread_join(agent->tid, NULL);
+        pal_thread_join(&agent->tid);
         JS_FreeValue(ctx, agent->broadcast_sab);
         list_del(&agent->link);
         free(agent);
@@ -617,7 +613,7 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
 
     /* broadcast the values and wait until all agents have started
        calling their callbacks */
-    pthread_mutex_lock(&agent_mutex);
+    pal_mutex_lock(&agent_mutex);
     list_for_each(el, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
         agent->broadcast_pending = TRUE;
@@ -628,12 +624,12 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
         agent->broadcast_sab_size = buf_size;
         agent->broadcast_val = val;
     }
-    pthread_cond_broadcast(&agent_cond);
+    pal_condition_broadcast(&agent_cond);
 
     while (is_broadcast_pending()) {
-        pthread_cond_wait(&agent_cond, &agent_mutex);
+        pal_condition_wait(&agent_cond, &agent_mutex);
     }
-    pthread_mutex_unlock(&agent_mutex);
+    pal_mutex_unlock(&agent_mutex);
     return JS_UNDEFINED;
 }
 
@@ -672,14 +668,14 @@ static JSValue js_agent_getReport(JSContext *ctx, JSValue this_val,
     AgentReport *rep;
     JSValue ret;
 
-    pthread_mutex_lock(&report_mutex);
+    pal_mutex_lock(&report_mutex);
     if (list_empty(&report_list)) {
         rep = NULL;
     } else {
         rep = list_entry(report_list.next, AgentReport, link);
         list_del(&rep->link);
     }
-    pthread_mutex_unlock(&report_mutex);
+    pal_mutex_unlock(&report_mutex);
     if (rep) {
         ret = JS_NewString(ctx, rep->str);
         free(rep->str);
@@ -703,9 +699,9 @@ static JSValue js_agent_report(JSContext *ctx, JSValue this_val,
     rep->str = strdup(str);
     JS_FreeCString(ctx, str);
 
-    pthread_mutex_lock(&report_mutex);
+    pal_mutex_lock(&report_mutex);
     list_add_tail(&rep->link, &report_list);
-    pthread_mutex_unlock(&report_mutex);
+    pal_mutex_unlock(&report_mutex);
     return JS_UNDEFINED;
 }
 
@@ -1503,6 +1499,22 @@ void update_stats(JSRuntime *rt, const char *filename) {
 #undef update
 }
 
+void run_test262_initialize() {
+#ifdef CONFIG_AGENT
+    pal_mutex_init(&agent_mutex);
+    pal_mutex_init(&report_mutex);
+    pal_condition_init(&agent_cond);
+#endif
+}
+
+void run_test262_finalize() {
+#ifdef CONFIG_AGENT
+    pal_mutex_destroy(&agent_mutex);
+    pal_mutex_destroy(&report_mutex);
+    pal_condition_destroy(&agent_cond);
+#endif
+}
+
 int run_test_buf(const char *filename, char *harness, namelist_t *ip,
                  char *buf, size_t buf_len, const char* error_type,
                  int eval_flags, BOOL is_negative, BOOL is_async,
@@ -1512,6 +1524,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     JSContext *ctx;
     int i, ret;
 
+    run_test262_initialize();
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fatal(1, "JS_NewRuntime failure");
@@ -1549,6 +1562,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
 
     test_count++;
     if (ret) {
@@ -1808,6 +1822,7 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
 
     outfile = stdout; /* for js_print */
 
+    run_test262_initialize();
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fatal(1, "JS_NewRuntime failure");
@@ -1858,6 +1873,8 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
+
     return ret_code;
 }
 
@@ -1949,6 +1966,7 @@ int main(int argc, char **argv)
     BOOL is_test262_harness = FALSE;
     BOOL is_module = FALSE;
 
+    JS_Initialize();
 #if !defined(_WIN32)
     /* Date tests assume California local time */
     setenv("TZ", "America/Los_Angeles", 1);
@@ -2007,7 +2025,10 @@ int main(int argc, char **argv)
         help();
 
     if (is_test262_harness) {
-        return run_test262_harness_test(argv[optind], is_module);
+        int run_result = run_test262_harness_test(argv[optind], is_module);
+        JS_Finalize();
+
+        return run_result;
     }
 
     error_out = stdout;
@@ -2107,6 +2128,7 @@ int main(int argc, char **argv)
     free(harness_features);
     free(harness_exclude);
     free(error_file);
+    JS_Finalize();
 
     if (new_errors) {
         return -1;
