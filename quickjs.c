@@ -31,13 +31,6 @@
 #include <time.h>
 #include <fenv.h>
 #include <math.h>
-#if defined(__APPLE__)
-#include <malloc/malloc.h>
-#elif defined(__linux__)
-#include <malloc.h>
-#elif defined(__FreeBSD__)
-#include <malloc_np.h>
-#endif
 
 #include "cutils.h"
 #include "list.h"
@@ -65,6 +58,10 @@
 
 /* define it if printf uses the RNDN rounding mode instead of RNDNA */
 #define CONFIG_PRINTF_RNDN
+
+#define malloc(s) malloc_is_forbidden(s)
+#define free(p) free_is_forbidden(p)
+#define realloc(p,s) realloc_is_forbidden(p,s)
 
 /* define to include Atomics.* operations which depend on the OS
    threads */
@@ -1681,23 +1678,6 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
     rt->user_opaque = opaque;
 }
 
-/* default memory allocation functions with memory limitation */
-static inline size_t js_def_malloc_usable_size(void *ptr)
-{
-#if defined(__APPLE__)
-    return malloc_size(ptr);
-#elif defined(_WIN32)
-    return _msize(ptr);
-#elif defined(EMSCRIPTEN)
-    return 0;
-#elif defined(__linux__)
-    return malloc_usable_size(ptr);
-#else
-    /* change this to `return 0;` if compilation fails */
-    return malloc_usable_size(ptr);
-#endif
-}
-
 static void *js_def_malloc(JSMallocState *s, size_t size)
 {
     void *ptr;
@@ -1708,12 +1688,12 @@ static void *js_def_malloc(JSMallocState *s, size_t size)
     if (unlikely(s->malloc_size + size > s->malloc_limit))
         return NULL;
 
-    ptr = malloc(size);
+    ptr = pal_malloc(size);
     if (!ptr)
         return NULL;
 
     s->malloc_count++;
-    s->malloc_size += js_def_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+    s->malloc_size += pal_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
     return ptr;
 }
 
@@ -1723,8 +1703,8 @@ static void js_def_free(JSMallocState *s, void *ptr)
         return;
 
     s->malloc_count--;
-    s->malloc_size -= js_def_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
-    free(ptr);
+    s->malloc_size -= pal_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+    pal_free(ptr);
 }
 
 static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
@@ -1736,21 +1716,21 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
             return NULL;
         return js_def_malloc(s, size);
     }
-    old_size = js_def_malloc_usable_size(ptr);
+    old_size = pal_malloc_usable_size(ptr);
     if (size == 0) {
         s->malloc_count--;
         s->malloc_size -= old_size + MALLOC_OVERHEAD;
-        free(ptr);
+        pal_free(ptr);
         return NULL;
     }
     if (s->malloc_size + size - old_size > s->malloc_limit)
         return NULL;
 
-    ptr = realloc(ptr, size);
+    ptr = pal_realloc(ptr, size);
     if (!ptr)
         return NULL;
 
-    s->malloc_size += js_def_malloc_usable_size(ptr) - old_size;
+    s->malloc_size += pal_malloc_usable_size(ptr) - old_size;
     return ptr;
 }
 
@@ -1758,18 +1738,7 @@ static const JSMallocFunctions def_malloc_funcs = {
     js_def_malloc,
     js_def_free,
     js_def_realloc,
-#if defined(__APPLE__)
-    malloc_size,
-#elif defined(_WIN32)
-    (size_t (*)(const void *))_msize,
-#elif defined(EMSCRIPTEN)
-    NULL,
-#elif defined(__linux__)
-    (size_t (*)(const void *))malloc_usable_size,
-#else
-    /* change this to `NULL,` if compilation fails */
-    malloc_usable_size,
-#endif
+    pal_malloc_usable_size,
 };
 
 JSRuntime *JS_NewRuntime(void)
@@ -1787,10 +1756,6 @@ void JS_SetGCThreshold(JSRuntime *rt, size_t gc_threshold)
 {
     rt->malloc_gc_threshold = gc_threshold;
 }
-
-#define malloc(s) malloc_is_forbidden(s)
-#define free(p) free_is_forbidden(p)
-#define realloc(p,s) realloc_is_forbidden(p,s)
 
 void JS_SetInterruptHandler(JSRuntime *rt, JSInterruptHandler *cb, void *opaque)
 {
