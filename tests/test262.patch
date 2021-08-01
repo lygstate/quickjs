@@ -1,8 +1,8 @@
 diff --git a/harness/atomicsHelper.js b/harness/atomicsHelper.js
-index 9c1217351e..3c24755558 100644
+index be446213bd..d294cc8aa5 100644
 --- a/harness/atomicsHelper.js
 +++ b/harness/atomicsHelper.js
-@@ -227,10 +227,14 @@ $262.agent.waitUntil = function(typedArray, index, expected) {
+@@ -272,10 +272,14 @@ $262.agent.waitUntil = function(typedArray, index, expected) {
   *   }
   */
  $262.agent.timeouts = {
