@@ -1957,8 +1957,13 @@ char *get_opt_arg(const char *option, char *arg)
     return arg;
 }
 
-int main(int argc, char **argv)
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **_argv, wchar_t **_envp)
+#else
+int main(int argc, char **_argv, char **_envp)
+#endif
 {
+    char **argv;
     int optind, start_index, stop_index;
     BOOL is_dir_list;
     BOOL only_check_errors = FALSE;
@@ -1966,6 +1971,8 @@ int main(int argc, char **argv)
     BOOL is_test262_harness = FALSE;
     BOOL is_module = FALSE;
 
+    pal_initialize(argc, (void**)_argv, (void**)_envp, true);
+    argv = pal_process_info_get()->argv;
     JS_Initialize();
 #if !defined(_WIN32)
     /* Date tests assume California local time */
