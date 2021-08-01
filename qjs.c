@@ -319,6 +319,7 @@ int main(int argc, char **argv)
 #endif
     size_t stack_size = 0;
 
+    JS_Initialize();
 #ifdef CONFIG_BIGNUM
     /* load jscalc runtime if invoked as 'qjscalc' */
     {
@@ -564,10 +565,14 @@ int main(int argc, char **argv)
                best[1] + best[2] + best[3] + best[4],
                best[1], best[2], best[3], best[4]);
     }
+    JS_Finalize();
+
     return 0;
  fail:
     js_std_free_handlers(rt);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    JS_Finalize();
+
     return 1;
 }
