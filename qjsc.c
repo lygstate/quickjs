@@ -483,9 +483,39 @@ typedef enum {
     OUTPUT_EXECUTABLE,
 } OutputTypeEnum;
 
+int get_opt_arg(char **argv, int *optind, const char *expect, const char** optarg_out)
+{
+    char *arg;
+    size_t expect_len = strlen(expect);
+    const char* optarg = NULL;
+    if (*optind <= 0) {
+        return 0;
+    }
+    arg = argv[*optind];
+    if (memcmp(arg, expect, expect_len) == 0) {
+        *optind += 1;
+        if (optarg_out) {
+            if (strlen(arg) > expect_len) {
+                optarg = arg + expect_len;
+            } else {
+                optarg = argv[*optind];
+                if (optarg == NULL) {
+                    /* missing argument for arg, record the optind with -optind */
+                    *optind = -*optind;
+                    return 0;
+                }
+                *optind += 1;
+            }
+            *optarg_out = optarg;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
-    int c, i, verbose;
+    int i, verbose;
     const char *out_filename, *cname;
     char cfilename[1024];
     FILE *fo;
@@ -499,6 +529,7 @@ int main(int argc, char **argv)
     BOOL bignum_ext = FALSE;
 #endif
     namelist_t dynamic_module_list;
+    int optind = 1;
 
     out_filename = NULL;
     output_type = OUTPUT_EXECUTABLE;
@@ -515,26 +546,19 @@ int main(int argc, char **argv)
     namelist_add(&cmodule_list, "std", "std", 0);
     namelist_add(&cmodule_list, "os", "os", 0);
 
-    for(;;) {
-        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:");
-        if (c == -1)
-            break;
-        switch(c) {
-        case 'h':
+    while (optind > 0 && optind < argc) {
+        const char *optarg;
+        if (get_opt_arg(argv, &optind, "-h", NULL)) {
             help();
-        case 'o':
+        } else if (get_opt_arg(argv, &optind, "-o", &optarg)) {
             out_filename = optarg;
-            break;
-        case 'c':
+        } else if (get_opt_arg(argv, &optind, "-c", NULL)) {
             output_type = OUTPUT_C;
-            break;
-        case 'e':
+        } else if (get_opt_arg(argv, &optind, "-e", NULL)) {
             output_type = OUTPUT_C_MAIN;
-            break;
-        case 'N':
+        } else if (get_opt_arg(argv, &optind, "-N", &optarg)) {
             cname = optarg;
-            break;
-        case 'f':
+        } else if (get_opt_arg(argv, &optind, "-f", &optarg)) {
             {
                 const char *p;
                 p = optarg;
@@ -562,11 +586,9 @@ int main(int argc, char **argv)
                     exit(1);
                 }
             }
-            break;
-        case 'm':
+        } else if (get_opt_arg(argv, &optind, "-m", NULL)) {
             module = 1;
-            break;
-        case 'M':
+        } else if (get_opt_arg(argv, &optind, "-M", &optarg)) {
             {
                 char *p;
                 char path[1024];
@@ -581,25 +603,25 @@ int main(int argc, char **argv)
                 }
                 namelist_add(&cmodule_list, path, cname, 0);
             }
-            break;
-        case 'D':
+        } else if (get_opt_arg(argv, &optind, "-D", &optarg)) {
             namelist_add(&dynamic_module_list, optarg, NULL, 0);
-            break;
-        case 'x':
+        } else if (get_opt_arg(argv, &optind, "-x", NULL)) {
             byte_swap = TRUE;
-            break;
-        case 'v':
+        } else if (get_opt_arg(argv, &optind, "-v", NULL)) {
             verbose++;
-            break;
-        case 'p':
+        } else if (get_opt_arg(argv, &optind, "-p", &optarg)) {
             c_ident_prefix = optarg;
-            break;
-        case 'S':
+        } else if (get_opt_arg(argv, &optind, "-S", &optarg)) {
             stack_size = (size_t)strtod(optarg, NULL);
-            break;
-        default:
+        } else {
+            /* The input javascript sources to compiling */
             break;
         }
+    }
+
+    if (optind < 0) {
+        fprintf(stderr, "missing argument for option %s", argv[-optind]);
+        exit(2);
     }
 
     if (optind >= argc)
