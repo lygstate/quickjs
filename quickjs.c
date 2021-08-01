@@ -42033,20 +42033,6 @@ static const JSCFunctionListEntry js_math_obj[] = {
 };
 
 /* Date */
-
-#if 0
-/* OS dependent: return the UTC time in ms since 1970. */
-static JSValue js___date_now(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    int64_t d;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    d = (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
-    return JS_NewInt64(ctx, d);
-}
-#endif
-
 /* OS dependent: return the UTC time in microseconds since 1970. */
 static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
@@ -42061,83 +42047,8 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
 /* OS dependent. d = argv[0] is in ms from 1970. Return the difference
    between UTC time and local time 'd' in minutes */
 static int getTimezoneOffset(int64_t time) {
-#if defined(_WIN32)
-    /* XXX: TODO */
-    return 0;
-#else
-    time_t ti;
-    struct tm tm;
-
-    time /= 1000; /* convert to seconds */
-    if (sizeof(time_t) == 4) {
-        /* on 32-bit systems, we need to clamp the time value to the
-           range of `time_t`. This is better than truncating values to
-           32 bits and hopefully provides the same result as 64-bit
-           implementation of localtime_r.
-         */
-        if ((time_t)-1 < 0) {
-            if (time < INT32_MIN) {
-                time = INT32_MIN;
-            } else if (time > INT32_MAX) {
-                time = INT32_MAX;
-            }
-        } else {
-            if (time < 0) {
-                time = 0;
-            } else if (time > UINT32_MAX) {
-                time = UINT32_MAX;
-            }
-        }
-    }
-    ti = time;
-    localtime_r(&ti, &tm);
-    return -tm.tm_gmtoff / 60;
-#endif
+    return pal_gettimezoneoffset(time);
 }
-
-#if 0
-static JSValue js___date_getTimezoneOffset(JSContext *ctx, JSValueConst this_val,
-                                           int argc, JSValueConst *argv)
-{
-    double dd;
-
-    if (JS_ToFloat64(ctx, &dd, argv[0]))
-        return JS_EXCEPTION;
-    if (isnan(dd))
-        return __JS_NewFloat64(ctx, dd);
-    else
-        return JS_NewInt32(ctx, getTimezoneOffset((int64_t)dd));
-}
-
-static JSValue js_get_prototype_from_ctor(JSContext *ctx, JSValueConst ctor,
-                                          JSValueConst def_proto)
-{
-    JSValue proto;
-    proto = JS_GetProperty(ctx, ctor, JS_ATOM_prototype);
-    if (JS_IsException(proto))
-        return proto;
-    if (!JS_IsObject(proto)) {
-        JS_FreeValue(ctx, proto);
-        proto = JS_DupValue(ctx, def_proto);
-    }
-    return proto;
-}
-
-/* create a new date object */
-static JSValue js___date_create(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    JSValue obj, proto;
-    proto = js_get_prototype_from_ctor(ctx, argv[0], argv[1]);
-    if (JS_IsException(proto))
-        return proto;
-    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_DATE);
-    JS_FreeValue(ctx, proto);
-    if (!JS_IsException(obj))
-        JS_SetObjectData(ctx, obj, JS_DupValue(ctx, argv[2]));
-    return obj;
-}
-#endif
 
 /* RegExp */
 
@@ -47920,9 +47831,6 @@ static const JSCFunctionListEntry js_global_funcs[] = {
 
     /* for the 'Date' implementation */
     JS_CFUNC_DEF("__date_clock", 0, js___date_clock ),
-    //JS_CFUNC_DEF("__date_now", 0, js___date_now ),
-    //JS_CFUNC_DEF("__date_getTimezoneOffset", 1, js___date_getTimezoneOffset ),
-    //JS_CFUNC_DEF("__date_create", 3, js___date_create ),
 };
 
 /* Date */
@@ -48699,7 +48607,6 @@ static JSValue js_date_Symbol_toPrimitive(JSContext *ctx, JSValueConst this_val,
 static JSValue js_date_getTimezoneOffset(JSContext *ctx, JSValueConst this_val,
                                          int argc, JSValueConst *argv)
 {
-    // getTimezoneOffset()
     double v;
 
     if (JS_ThisTimeValue(ctx, &v, this_val))
