@@ -2109,5 +2109,9 @@ int main(int argc, char **argv)
     free(harness_exclude);
     free(error_file);
 
-    return 0;
+    if (new_errors) {
+        return -1;
+    } else {
+        return 0;
+    }
 }
