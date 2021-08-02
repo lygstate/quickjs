@@ -726,7 +726,7 @@ static JSValue js_std_unsetenv(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_getenviron(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
-    char **envp;
+    pal_process_info_t *info = pal_process_info_get();
     const char *name, *p, *value;
     JSValue obj;
     uint32_t idx;
@@ -737,9 +737,8 @@ static JSValue js_std_getenviron(JSContext *ctx, JSValueConst this_val,
     obj = JS_NewObject(ctx);
     if (JS_IsException(obj))
         return JS_EXCEPTION;
-    envp = environ;
-    for(idx = 0; envp[idx] != NULL; idx++) {
-        name = envp[idx];
+    for(idx = 0; idx < info->envc; idx++) {
+        name = info->envp[idx];
         p = strchr(name, '=');
         name_len = p - name;
         if (!p)
