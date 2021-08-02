@@ -25,6 +25,9 @@
 ifeq ($(shell uname -s),Darwin)
 CONFIG_DARWIN=y
 endif
+ifeq ($(OS),Windows_NT)
+CONFIG_WIN32=y
+endif
 # Windows cross compilation from Linux
 #CONFIG_WIN32=y
 # use link time optimization (smaller and faster executables but slower build)
@@ -167,12 +170,16 @@ endif
 all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
 QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o
-
+QJS_LIB_OBJS+=$(OBJDIR)/cwalk.o
+QJS_LIB_OBJS+=$(OBJDIR)/pal-port-hosted.o
+QJS_LIB_OBJS+=$(OBJDIR)/pal-port-shared.o
 # debugger
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
 ifndef CONFIG_WIN32
+QJS_LIB_OBJS+=$(OBJDIR)/pal-port-unix.o
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
 else
+QJS_LIB_OBJS+=$(OBJDIR)/pal-port-win.o
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
 endif
 

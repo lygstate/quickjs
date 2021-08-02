@@ -28,6 +28,7 @@
 #include <stdlib.h>
 
 #include "quickjs.h"
+#include "pal-port.h"
 
 #ifdef __cplusplus
 extern "C" {
