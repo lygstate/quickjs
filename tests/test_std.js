@@ -116,7 +116,7 @@ function test_popen()
     assert(std.loadFile(fname), content);
 
     /* execute the 'cat' shell command */
-    f = std.popen("cat " + fname, "r");
+    f = std.popen("cmake -E cat " + fname, "r");
     str = f.readAsString();
     f.close();
 
