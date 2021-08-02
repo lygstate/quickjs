@@ -35,6 +35,8 @@
 #include <alloca.h>
 #endif
 
+#include "pal-port.h"
+
 /* set if CPU is big endian */
 #undef WORDS_BIGENDIAN
 
