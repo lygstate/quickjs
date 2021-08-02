@@ -2478,14 +2478,6 @@ static JSValue js_os_stat(JSContext *ctx, JSValueConst this_val,
     return make_obj_error(ctx, obj, err);
 }
 
-#if !defined(_WIN32)
-static void ms_to_timeval(struct timeval *tv, uint64_t v)
-{
-    tv->tv_sec = v / 1000;
-    tv->tv_usec = (v % 1000) * 1000;
-}
-#endif
-
 static JSValue js_os_utimes(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -2500,21 +2492,7 @@ static JSValue js_os_utimes(JSContext *ctx, JSValueConst this_val,
     path = JS_ToCString(ctx, argv[0]);
     if (!path)
         return JS_EXCEPTION;
-#if defined(_WIN32)
-    {
-        struct _utimbuf times;
-        times.actime = atime / 1000;
-        times.modtime = mtime / 1000;
-        ret = js_get_errno(_utime(path, &times));
-    }
-#else
-    {
-        struct timeval times[2];
-        ms_to_timeval(&times[0], atime);
-        ms_to_timeval(&times[1], mtime);
-        ret = js_get_errno(utimes(path, times));
-    }
-#endif
+    ret = js_get_errno(pal_utimes(path, atime, mtime));
     JS_FreeCString(ctx, path);
     return JS_NewInt32(ctx, ret);
 }
