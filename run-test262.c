@@ -31,11 +31,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
-#if !defined(_MSC_VER)
-#include <unistd.h>
-#include <dirent.h>
-#include <ftw.h>
-#endif
 
 #include "cutils.h"
 #include "list.h"
@@ -363,10 +358,10 @@ void namelist_free(namelist_t *lp)
     lp->size = 0;
 }
 
-static int add_test_file(const char *filename, const struct stat *ptr, int flag)
+static int add_test_file(void *context, const char *filename, int is_dir)
 {
-    namelist_t *lp = &test_list;
-    if (has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
+    namelist_t *lp = (namelist_t *)context;
+    if (!is_dir && has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
         namelist_add(lp, NULL, filename);
     return 0;
 }
@@ -376,9 +371,7 @@ static void enumerate_tests(const char *path)
 {
     namelist_t *lp = &test_list;
     int start = lp->count;
-#if !defined(_MSC_VER)
-    ftw(path, add_test_file, 100);
-#endif
+    pal_listdir((void*)lp, path, 1, add_test_file);
     qsort(lp->array + start, lp->count - start, sizeof(*lp->array),
           namelist_cmp_indirect);
 }
