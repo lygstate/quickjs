@@ -29,19 +29,21 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/time.h>
 #include <time.h>
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <dirent.h>
+#if !defined(_MSC_VER)
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
-#include <utime.h>
+#include <sys/utime.h>
+#include <io.h>
 #else
 #include <dlfcn.h>
 #include <termios.h>
@@ -2472,8 +2474,8 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
     const char *path;
-    DIR *f;
-    struct dirent *d;
+    pal_dir_t *f;
+    pal_dirent_t *d;
     JSValue obj;
     int err;
     uint32_t len;
@@ -2486,7 +2488,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, path);
         return JS_EXCEPTION;
     }
-    f = opendir(path);
+    f = pal_opendir(path);
     if (!f)
         err = errno;
     else
@@ -2497,7 +2499,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
     len = 0;
     for(;;) {
         errno = 0;
-        d = readdir(f);
+        d = pal_readdir(f);
         if (!d) {
             err = errno;
             break;
@@ -2506,7 +2508,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
                                      JS_NewString(ctx, d->d_name),
                                      JS_PROP_C_W_E);
     }
-    closedir(f);
+    pal_closedir(f);
  done:
     return make_obj_error(ctx, obj, err);
 }
