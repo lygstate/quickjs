@@ -29,7 +29,6 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
-#include <fenv.h>
 #include <math.h>
 
 #include "cutils.h"
@@ -11292,11 +11291,11 @@ static char *i64toa(char *buf_end, int64_t n, unsigned int base)
 static void js_ecvt1(double d, int n_digits, int *decpt, int *sign, char *buf,
                      int rounding_mode, char *buf1, int buf1_size)
 {
-    if (rounding_mode != FE_TONEAREST)
-        fesetround(rounding_mode);
+    if (rounding_mode != PAL_FE_TONEAREST)
+        pal_fesetround(rounding_mode);
     snprintf(buf1, buf1_size, "%+.*e", n_digits - 1, d);
-    if (rounding_mode != FE_TONEAREST)
-        fesetround(FE_TONEAREST);
+    if (rounding_mode != PAL_FE_TONEAREST)
+        pal_fesetround(PAL_FE_TONEAREST);
     *sign = (buf1[0] == '-');
     /* mantissa */
     buf[0] = buf1[1];
@@ -11325,7 +11324,7 @@ static int js_ecvt(double d, int n_digits, int *decpt, int *sign, char *buf,
         n_digits_max = 17;
         while (n_digits_min < n_digits_max) {
             n_digits = (n_digits_min + n_digits_max) / 2;
-            js_ecvt1(d, n_digits, decpt, sign, buf, FE_TONEAREST,
+            js_ecvt1(d, n_digits, decpt, sign, buf, PAL_FE_TONEAREST,
                      buf_tmp, sizeof(buf_tmp));
             if (strtod(buf_tmp, NULL) == d) {
                 /* no need to keep the trailing zeros */
@@ -11337,9 +11336,9 @@ static int js_ecvt(double d, int n_digits, int *decpt, int *sign, char *buf,
             }
         }
         n_digits = n_digits_max;
-        rounding_mode = FE_TONEAREST;
+        rounding_mode = PAL_FE_TONEAREST;
     } else {
-        rounding_mode = FE_TONEAREST;
+        rounding_mode = PAL_FE_TONEAREST;
 #ifdef CONFIG_PRINTF_RNDN
         {
             char buf1[JS_DTOA_BUF_SIZE], buf2[JS_DTOA_BUF_SIZE];
@@ -11348,20 +11347,20 @@ static int js_ecvt(double d, int n_digits, int *decpt, int *sign, char *buf,
                from zero (RNDNA), but in printf the "ties" case is not
                specified (for example it is RNDN for glibc, RNDNA for
                Windows), so we must round manually. */
-            js_ecvt1(d, n_digits + 1, &decpt1, &sign1, buf1, FE_TONEAREST,
+            js_ecvt1(d, n_digits + 1, &decpt1, &sign1, buf1, PAL_FE_TONEAREST,
                      buf_tmp, sizeof(buf_tmp));
             /* XXX: could use 2 digits to reduce the average running time */
             if (buf1[n_digits] == '5') {
-                js_ecvt1(d, n_digits + 1, &decpt1, &sign1, buf1, FE_DOWNWARD,
+                js_ecvt1(d, n_digits + 1, &decpt1, &sign1, buf1, PAL_FE_DOWNWARD,
                          buf_tmp, sizeof(buf_tmp));
-                js_ecvt1(d, n_digits + 1, &decpt2, &sign2, buf2, FE_UPWARD,
+                js_ecvt1(d, n_digits + 1, &decpt2, &sign2, buf2, PAL_FE_UPWARD,
                          buf_tmp, sizeof(buf_tmp));
                 if (memcmp(buf1, buf2, n_digits + 1) == 0 && decpt1 == decpt2) {
                     /* exact result: round away from zero */
                     if (sign1)
-                        rounding_mode = FE_DOWNWARD;
+                        rounding_mode = PAL_FE_DOWNWARD;
                     else
-                        rounding_mode = FE_UPWARD;
+                        rounding_mode = PAL_FE_UPWARD;
                 }
             }
         }
@@ -11376,11 +11375,11 @@ static int js_fcvt1(char *buf, int buf_size, double d, int n_digits,
                     int rounding_mode)
 {
     int n;
-    if (rounding_mode != FE_TONEAREST)
-        fesetround(rounding_mode);
+    if (rounding_mode != PAL_FE_TONEAREST)
+        pal_fesetround(rounding_mode);
     n = snprintf(buf, buf_size, "%.*f", n_digits, d);
-    if (rounding_mode != FE_TONEAREST)
-        fesetround(FE_TONEAREST);
+    if (rounding_mode != PAL_FE_TONEAREST)
+        pal_fesetround(PAL_FE_TONEAREST);
     assert(n < buf_size);
     return n;
 }
@@ -11388,7 +11387,7 @@ static int js_fcvt1(char *buf, int buf_size, double d, int n_digits,
 static void js_fcvt(char *buf, int buf_size, double d, int n_digits)
 {
     int rounding_mode;
-    rounding_mode = FE_TONEAREST;
+    rounding_mode = PAL_FE_TONEAREST;
 #ifdef CONFIG_PRINTF_RNDN
     {
         int n1, n2;
@@ -11399,18 +11398,18 @@ static void js_fcvt(char *buf, int buf_size, double d, int n_digits)
            zero (RNDNA), but in printf the "ties" case is not specified
            (for example it is RNDN for glibc, RNDNA for Windows), so we
            must round manually. */
-        n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, FE_TONEAREST);
-        rounding_mode = FE_TONEAREST;
+        n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, PAL_FE_TONEAREST);
+        rounding_mode = PAL_FE_TONEAREST;
         /* XXX: could use 2 digits to reduce the average running time */
         if (buf1[n1 - 1] == '5') {
-            n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, FE_DOWNWARD);
-            n2 = js_fcvt1(buf2, sizeof(buf2), d, n_digits + 1, FE_UPWARD);
+            n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, PAL_FE_DOWNWARD);
+            n2 = js_fcvt1(buf2, sizeof(buf2), d, n_digits + 1, PAL_FE_UPWARD);
             if (n1 == n2 && memcmp(buf1, buf2, n1) == 0) {
                 /* exact result: round away from zero */
                 if (buf1[0] == '-')
-                    rounding_mode = FE_DOWNWARD;
+                    rounding_mode = PAL_FE_DOWNWARD;
                 else
-                    rounding_mode = FE_UPWARD;
+                    rounding_mode = PAL_FE_UPWARD;
             }
         }
     }
