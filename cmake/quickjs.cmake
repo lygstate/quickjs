@@ -31,9 +31,29 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libbf.c
   ${QUICKJS_SOURCE_DIR}/libregexp.c
   ${QUICKJS_SOURCE_DIR}/libunicode.c
+  ${QUICKJS_SOURCE_DIR}/cwalk.c
+  ${QUICKJS_SOURCE_DIR}/pal-port-shared.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
 )
+
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "General")
+else()
+  target_sources(quickjs PRIVATE
+    ${QUICKJS_SOURCE_DIR}/pal-port-hosted.c
+  )
+  if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+    target_sources(quickjs PRIVATE
+      ${QUICKJS_SOURCE_DIR}/pal-port-win.c
+      ${QUICKJS_SOURCE_DIR}/win/msvc_stdatomic.c
+    )
+  else()
+    target_sources(quickjs PRIVATE
+      ${QUICKJS_SOURCE_DIR}/pal-port-unix.c
+    )
+  endif()
+endif()
+
 qjs_setup_common_flags(quickjs)
 add_library(quickjs::quickjs ALIAS quickjs)
 set_target_properties(quickjs PROPERTIES

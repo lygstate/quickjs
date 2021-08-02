@@ -42,6 +42,7 @@
 
 #include "cutils.h"
 #include "list.h"
+#include "pal-port.h"
 #include "quickjs.h"
 #include "libregexp.h"
 #ifdef CONFIG_BIGNUM
