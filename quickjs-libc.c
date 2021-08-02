@@ -365,46 +365,48 @@ fail:
 
 uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)
 {
-    FILE *f;
-    uint8_t *buf;
-    size_t buf_len;
-    long lret;
-
-    f = fopen(filename, "rb");
-    if (!f)
-        return NULL;
-    if (fseek(f, 0, SEEK_END) < 0)
-        goto fail;
-    lret = ftell(f);
-    if (lret < 0)
-        goto fail;
-    /* XXX: on Linux, ftell() return LONG_MAX for directories */
-    if (lret == LONG_MAX) {
-        errno = EISDIR;
-        goto fail;
+    pal_file_t f;
+    uint8_t *buf = NULL;
+    unsigned int buf_len;
+    pal_stat_t st;
+    f = pal_open(filename, O_RDONLY, -1);
+    if (f < 0) {
+        goto done;
     }
-    buf_len = lret;
-    if (fseek(f, 0, SEEK_SET) < 0)
-        goto fail;
-    if (ctx)
+    if (pal_fstat(f, &st) < 0) {
+        goto done;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        goto done;
+    }
+    if (st.st_size < 0) {
+        goto done;
+    }
+    if (st.st_size >= UINT_MAX) {
+        goto done;
+    }
+    buf_len = st.st_size;
+    if (ctx) {
         buf = js_malloc(ctx, buf_len + 1);
-    else
+    } else {
         buf = malloc(buf_len + 1);
-    if (!buf)
-        goto fail;
-    if (fread(buf, 1, buf_len, f) != buf_len) {
+    }
+    if (!buf) {
+        goto done;
+    }
+    if (pal_read(f, buf, buf_len) != buf_len) {
         errno = EIO;
         if (ctx)
             js_free(ctx, buf);
         else
             free(buf);
-    fail:
-        fclose(f);
-        return NULL;
+        buf = NULL;
+        goto done;
     }
     buf[buf_len] = '\0';
-    fclose(f);
     *pbuf_len = buf_len;
+done:
+    pal_close(f);
     return buf;
 }
 
