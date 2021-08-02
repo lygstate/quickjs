@@ -54,6 +54,8 @@
 #define MALLOC_OVERHEAD  8
 #endif
 
+#define abort pal_abort
+
 /* define it if printf uses the RNDN rounding mode instead of RNDNA */
 #define CONFIG_PRINTF_RNDN
 
