@@ -2371,16 +2371,17 @@ static JSValue make_string_error(JSContext *ctx,
 static JSValue js_os_getcwd(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    char buf[PATH_MAX];
-    int err;
+    char *cwd;
+    JSValue ret;
 
-    if (!getcwd(buf, sizeof(buf))) {
-        buf[0] = '\0';
-        err = errno;
+    cwd = pal_getcwd();
+    if (cwd != NULL) {
+        ret = make_string_error(ctx, cwd, 0);
+        pal_free(cwd);
     } else {
-        err = 0;
+        ret = make_string_error(ctx, "", js_get_errno(errno));
     }
-    return make_string_error(ctx, buf, err);
+    return ret;
 }
 
 static JSValue js_os_chdir(JSContext *ctx, JSValueConst this_val,
