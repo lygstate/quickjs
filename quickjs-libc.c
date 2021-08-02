@@ -2593,7 +2593,6 @@ static JSValue js_os_realpath(JSContext *ctx, JSValueConst this_val,
     return make_string_error(ctx, buf, err);
 }
 
-#if !defined(_WIN32)
 static JSValue js_os_symlink(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -2608,7 +2607,7 @@ static JSValue js_os_symlink(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, target);
         return JS_EXCEPTION;
     }
-    err = js_get_errno(symlink(target, linkpath));
+    err = js_get_errno(pal_symlink(target, linkpath, -1));
     JS_FreeCString(ctx, target);
     JS_FreeCString(ctx, linkpath);
     return JS_NewInt32(ctx, err);
@@ -2619,26 +2618,24 @@ static JSValue js_os_readlink(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
     const char *path;
-    char buf[PATH_MAX];
-    int err;
-    ssize_t res;
+    char *link;
+    JSValue result;
 
     path = JS_ToCString(ctx, argv[0]);
     if (!path)
         return JS_EXCEPTION;
-    res = readlink(path, buf, sizeof(buf) - 1);
-    if (res < 0) {
-        buf[0] = '\0';
-        err = errno;
-    } else {
-        buf[res] = '\0';
-        err = 0;
-    }
+    link = pal_readlink(path);
     JS_FreeCString(ctx, path);
-    return make_string_error(ctx, buf, err);
+    if (link != NULL) {
+        result = make_string_error(ctx, link, js_get_errno(0));
+        pal_free(link);
+    } else {
+        result = make_string_error(ctx, "", js_get_errno(-1));
+    }
+    return result;
 }
 
-static char **build_envp(JSContext *ctx, JSValueConst obj)
+static char **build_envp(JSContext *ctx, JSValueConst obj, uint32_t *envc)
 {
     uint32_t len, i;
     JSPropertyEnum *tab;
@@ -2647,9 +2644,10 @@ static char **build_envp(JSContext *ctx, JSValueConst obj)
     JSValue val;
     size_t key_len, str_len;
 
-    if (JS_GetOwnPropertyNames(ctx, &tab, &len, obj,
+    if (JS_GetOwnPropertyNames(ctx, &tab, envc, obj,
                                JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
         return NULL;
+    len = *envc;
     envp = js_mallocz(ctx, sizeof(envp[0]) * ((size_t)len + 1));
     if (!envp)
         goto fail;
@@ -2697,72 +2695,20 @@ static char **build_envp(JSContext *ctx, JSValueConst obj)
     goto done;
 }
 
-/* execvpe is not available on non GNU systems */
-static int my_execvpe(const char *filename, char **argv, char **envp)
-{
-    char *path, *p, *p_next, *p1;
-    char buf[PATH_MAX];
-    size_t filename_len, path_len;
-    BOOL eacces_error;
-
-    filename_len = strlen(filename);
-    if (filename_len == 0) {
-        errno = ENOENT;
-        return -1;
-    }
-    if (strchr(filename, '/'))
-        return execve(filename, argv, envp);
-
-    path = getenv("PATH");
-    if (!path)
-        path = (char *)"/bin:/usr/bin";
-    eacces_error = FALSE;
-    p = path;
-    for(p = path; p != NULL; p = p_next) {
-        p1 = strchr(p, ':');
-        if (!p1) {
-            p_next = NULL;
-            path_len = strlen(p);
-        } else {
-            p_next = p1 + 1;
-            path_len = p1 - p;
-        }
-        /* path too long */
-        if ((path_len + 1 + filename_len + 1) > PATH_MAX)
-            continue;
-        memcpy(buf, p, path_len);
-        buf[path_len] = '/';
-        memcpy(buf + path_len + 1, filename, filename_len);
-        buf[path_len + 1 + filename_len] = '\0';
-
-        execve(buf, argv, envp);
-
-        switch(errno) {
-        case EACCES:
-            eacces_error = TRUE;
-            break;
-        case ENOENT:
-        case ENOTDIR:
-            break;
-        default:
-            return -1;
-        }
-    }
-    if (eacces_error)
-        errno = EACCES;
-    return -1;
-}
-
 /* exec(args[, options]) -> exitcode */
 static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {
     JSValueConst options, args = argv[0];
     JSValue val, ret_val;
-    const char **exec_argv, *file = NULL, *str, *cwd = NULL;
-    char **envp = environ;
+    char **exec_argv, *file = NULL, *str, *cwd = NULL;
+    pal_process_info_t *info = pal_process_info_get();
+    pal_process_info_t child;
+    char **envp = info->envp;
+    uint32_t envc = info->envc;
     uint32_t exec_argc, i;
-    int ret, pid, status;
+    int ret;
+    pal_pid_t pid;
     BOOL block_flag = TRUE, use_path = TRUE;
     static const char *std_name[3] = { "stdin", "stdout", "stderr" };
     int std_fds[3];
@@ -2845,7 +2791,7 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
         if (JS_IsException(val))
             goto exception;
         if (!JS_IsUndefined(val)) {
-            envp = build_envp(ctx, val);
+            envp = build_envp(ctx, val, &envc);
             JS_FreeValue(ctx, val);
             if (!envp)
                 goto exception;
@@ -2872,71 +2818,27 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
         }
     }
 
-    pid = fork();
+    child.argc = exec_argc;
+    child.argv = exec_argv;
+    child.envc = envc;
+    child.envp = envp;
+    pid = pal_execute(file, cwd, &child, use_path, std_fds, block_flag, gid, uid, &ret);
     if (pid < 0) {
         JS_ThrowTypeError(ctx, "fork error");
         goto exception;
     }
-    if (pid == 0) {
-        /* child */
-        int fd_max = sysconf(_SC_OPEN_MAX);
-
-        /* remap the stdin/stdout/stderr handles if necessary */
-        for(i = 0; i < 3; i++) {
-            if (std_fds[i] != i) {
-                if (dup2(std_fds[i], i) < 0)
-                    _exit(127);
-            }
-        }
-
-        for(i = 3; i < fd_max; i++)
-            close(i);
-        if (cwd) {
-            if (chdir(cwd) < 0)
-                _exit(127);
-        }
-        if (uid != -1) {
-            if (setuid(uid) < 0)
-                _exit(127);
-        }
-        if (gid != -1) {
-            if (setgid(gid) < 0)
-                _exit(127);
-        }
-
-        if (!file)
-            file = exec_argv[0];
-        if (use_path)
-            ret = my_execvpe(file, (char **)exec_argv, envp);
-        else
-            ret = execve(file, (char **)exec_argv, envp);
-        _exit(127);
-    }
-    /* parent */
     if (block_flag) {
-        for(;;) {
-            ret = waitpid(pid, &status, 0);
-            if (ret == pid) {
-                if (WIFEXITED(status)) {
-                    ret = WEXITSTATUS(status);
-                    break;
-                } else if (WIFSIGNALED(status)) {
-                    ret = -WTERMSIG(status);
-                    break;
-                }
-            }
-        }
+        ret_val = JS_NewInt32(ctx, ret);
     } else {
-        ret = pid;
+        ret_val = JS_NewInt32(ctx, pid);
     }
-    ret_val = JS_NewInt32(ctx, ret);
  done:
     JS_FreeCString(ctx, file);
     JS_FreeCString(ctx, cwd);
     for(i = 0; i < exec_argc; i++)
         JS_FreeCString(ctx, exec_argv[i]);
     js_free(ctx, exec_argv);
-    if (envp != environ) {
+    if (envp != info->envp) {
         char **p;
         p = envp;
         while (*p != NULL) {
@@ -2964,16 +2866,15 @@ static JSValue js_os_waitpid(JSContext *ctx, JSValueConst this_val,
     if (JS_ToInt32(ctx, &options, argv[1]))
         return JS_EXCEPTION;
 
-    ret = waitpid(pid, &status, options);
+    ret = pal_waitpid(pid, &status, options);
     if (ret < 0) {
-        ret = -errno;
         status = 0;
     }
 
     obj = JS_NewArray(ctx);
     if (JS_IsException(obj))
         return obj;
-    JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, ret),
+    JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, js_get_errno(ret)),
                                  JS_PROP_C_W_E);
     JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, status),
                                  JS_PROP_C_W_E);
@@ -3010,7 +2911,7 @@ static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &sig, argv[1]))
         return JS_EXCEPTION;
-    ret = js_get_errno(kill(pid, sig));
+    ret = js_get_errno(pal_kill(pid, sig));
     return JS_NewInt32(ctx, ret);
 }
 
@@ -3039,8 +2940,6 @@ static JSValue js_os_dup2(JSContext *ctx, JSValueConst this_val,
     ret = js_get_errno(pal_dup2(fd, fd2));
     return JS_NewInt32(ctx, ret);
 }
-
-#endif /* !_WIN32 */
 
 #ifdef USE_WORKER
 
@@ -3548,17 +3447,14 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     OS_FLAG(S_IFDIR),
     OS_FLAG(S_IFBLK),
     OS_FLAG(S_IFREG),
-#if !defined(_WIN32)
     OS_FLAG(S_IFSOCK),
     OS_FLAG(S_IFLNK),
     OS_FLAG(S_ISGID),
     OS_FLAG(S_ISUID),
-#endif
     JS_CFUNC_MAGIC_DEF("stat", 1, js_os_stat, 0 ),
     JS_CFUNC_DEF("utimes", 3, js_os_utimes ),
     JS_CFUNC_DEF("sleep", 1, js_os_sleep ),
     JS_CFUNC_DEF("realpath", 1, js_os_realpath ),
-#if !defined(_WIN32)
     JS_CFUNC_MAGIC_DEF("lstat", 1, js_os_stat, 1 ),
     JS_CFUNC_DEF("symlink", 2, js_os_symlink ),
     JS_CFUNC_DEF("readlink", 1, js_os_readlink ),
@@ -3569,7 +3465,6 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("kill", 2, js_os_kill ),
     JS_CFUNC_DEF("dup", 1, js_os_dup ),
     JS_CFUNC_DEF("dup2", 2, js_os_dup2 ),
-#endif
 };
 
 static int js_os_init(JSContext *ctx, JSModuleDef *m)
