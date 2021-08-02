@@ -2009,22 +2009,12 @@ static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-#if defined(__linux__) || defined(__APPLE__)
 static int64_t get_time_ms(void)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+    pal_clock_gettime(PAL_CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 }
-#else
-/* more portable, but does not work if the date is updated */
-static int64_t get_time_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
-}
-#endif
 
 static void unlink_timer(JSRuntime *rt, JSOSTimer *th)
 {
