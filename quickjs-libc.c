@@ -2334,12 +2334,7 @@ static JSValue js_os_mkdir(JSContext *ctx, JSValueConst this_val,
     path = JS_ToCString(ctx, argv[0]);
     if (!path)
         return JS_EXCEPTION;
-#if defined(_WIN32)
-    (void)mode;
-    ret = js_get_errno(mkdir(path));
-#else
-    ret = js_get_errno(mkdir(path, mode));
-#endif
+    ret = js_get_errno(pal_mkdir(path, mode));
     JS_FreeCString(ctx, path);
     return JS_NewInt32(ctx, ret);
 }
