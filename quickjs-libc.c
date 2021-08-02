@@ -1742,19 +1742,7 @@ static JSValue js_os_remove(JSContext *ctx, JSValueConst this_val,
     filename = JS_ToCString(ctx, argv[0]);
     if (!filename)
         return JS_EXCEPTION;
-#if defined(_WIN32)
-    {
-        struct stat st;
-        if (stat(filename, &st) == 0 && S_ISDIR(st.st_mode)) {
-            ret = rmdir(filename);
-        } else {
-            ret = unlink(filename);
-        }
-    }
-#else
-    ret = remove(filename);
-#endif
-    ret = js_get_errno(ret);
+    ret = js_get_errno(pal_remove(filename));
     JS_FreeCString(ctx, filename);
     return JS_NewInt32(ctx, ret);
 }
