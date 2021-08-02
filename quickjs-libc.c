@@ -2104,83 +2104,6 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     JS_FreeValue(ctx, ret);
 }
 
-#if defined(_WIN32)
-
-static int js_os_poll(JSContext *ctx)
-{
-    JSRuntime *rt = JS_GetRuntime(ctx);
-    JSThreadState *ts = JS_GetRuntimeOpaque(rt);
-    int min_delay, console_fd;
-    int64_t cur_time, delay;
-    JSOSRWHandler *rh;
-    struct list_head *el;
-
-    /* XXX: handle signals if useful */
-
-    if (list_empty(&ts->os_rw_handlers) && list_empty(&ts->os_timers))
-        return -1; /* no more events */
-
-    /* XXX: only timers and basic console input are supported */
-    if (!list_empty(&ts->os_timers)) {
-        cur_time = get_time_ms();
-        min_delay = 10000;
-        list_for_each(el, &ts->os_timers) {
-            JSOSTimer *th = list_entry(el, JSOSTimer, link);
-            delay = th->timeout - cur_time;
-            if (delay <= 0) {
-                JSValue func;
-                /* the timer expired */
-                func = th->func;
-                th->func = JS_UNDEFINED;
-                unlink_timer(rt, th);
-                if (!th->has_object)
-                    free_timer(rt, th);
-                call_handler(ctx, func);
-                JS_FreeValue(ctx, func);
-                return 0;
-            } else if (delay < min_delay) {
-                min_delay = delay;
-            }
-        }
-    } else {
-        min_delay = -1;
-    }
-
-    console_fd = -1;
-    list_for_each(el, &ts->os_rw_handlers) {
-        rh = list_entry(el, JSOSRWHandler, link);
-        if (rh->fd == 0 && !JS_IsNull(rh->rw_func[0])) {
-            console_fd = rh->fd;
-            break;
-        }
-    }
-
-    if (console_fd >= 0) {
-        DWORD ti, ret;
-        HANDLE handle;
-        if (min_delay == -1)
-            ti = INFINITE;
-        else
-            ti = min_delay;
-        handle = (HANDLE)_get_osfhandle(console_fd);
-        ret = WaitForSingleObject(handle, ti);
-        if (ret == WAIT_OBJECT_0) {
-            list_for_each(el, &ts->os_rw_handlers) {
-                rh = list_entry(el, JSOSRWHandler, link);
-                if (rh->fd == console_fd && !JS_IsNull(rh->rw_func[0])) {
-                    call_handler(ctx, rh->rw_func[0]);
-                    /* must stop because the list may have been modified */
-                    break;
-                }
-            }
-        }
-    } else {
-        Sleep(min_delay);
-    }
-    return 0;
-}
-#else
-
 #ifdef USE_WORKER
 
 static void js_free_message(JSWorkerMessage *msg);
@@ -2262,12 +2185,13 @@ static int js_os_poll(JSContext *ctx)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
     JSThreadState *ts = JS_GetRuntimeOpaque(rt);
-    int ret, fd_max, min_delay;
+    int ret = 0;
+    int fd_max;
+    int min_delay = -1;
     int64_t cur_time, delay;
     fd_set rfds, wfds;
     JSOSRWHandler *rh;
     struct list_head *el;
-    struct timeval tv, *tvp;
 
     /* only check signals in the main thread */
     if (!ts->recv_pipe &&
@@ -2311,11 +2235,6 @@ static int js_os_poll(JSContext *ctx)
                 min_delay = delay;
             }
         }
-        tv.tv_sec = min_delay / 1000;
-        tv.tv_usec = (min_delay % 1000) * 1000;
-        tvp = &tv;
-    } else {
-        tvp = NULL;
     }
 
     FD_ZERO(&rfds);
@@ -2339,7 +2258,52 @@ static int js_os_poll(JSContext *ctx)
         }
     }
 
-    ret = select(fd_max + 1, &rfds, &wfds, NULL, tvp);
+#if defined(_WIN32)
+    {
+        HANDLE handle_list[128];
+        SOCKET fd_handle[128];
+        int rfds_count = rfds.fd_count;
+        int handle_count = 0;
+        for (size_t i = 0; i < rfds.fd_count; i += 1) {
+            handle_list[handle_count] = (HANDLE)_get_osfhandle(rfds.fd_array[i]);
+            fd_handle[handle_count] = rfds.fd_array[i];
+            handle_count += 1;
+        }
+        for (size_t i = 0; i < wfds.fd_count; i += 1) {
+            handle_list[handle_count] = (HANDLE)_get_osfhandle(wfds.fd_array[i]);
+            fd_handle[handle_count] = wfds.fd_array[i];
+            handle_count += 1;
+        }
+        if (handle_count > 0) {
+            DWORD wait_result = WaitForMultipleObjects(handle_count, handle_list, FALSE, min_delay);
+            if (wait_result >=WAIT_OBJECT_0 && wait_result < WAIT_OBJECT_0 + handle_count) {
+                ret = wait_result - WAIT_OBJECT_0 + 1;
+            } else {
+                ret = 0;
+            }
+        }
+        FD_ZERO(&rfds);
+        FD_ZERO(&wfds);
+        if (ret <= rfds_count) {
+            FD_SET(fd_handle[ret - 1], &rfds);
+        } else {
+            FD_SET(fd_handle[ret - 1], &wfds);
+        }
+    }
+#else
+    {
+        struct timeval tv;
+        struct timeval *tvp;
+        if (min_delay >= 0) {
+            tv.tv_sec = min_delay / 1000;
+            tv.tv_usec = (min_delay % 1000) * 1000;
+            tvp = &tv;
+        } else {
+            tvp = NULL;
+        }
+        ret = select(fd_max + 1, &rfds, &wfds, NULL, tvp);
+    }
+#endif
     if (ret > 0) {
         list_for_each(el, &ts->os_rw_handlers) {
             rh = list_entry(el, JSOSRWHandler, link);
@@ -2371,7 +2335,6 @@ static int js_os_poll(JSContext *ctx)
     done:
     return 0;
 }
-#endif /* !_WIN32 */
 
 static JSValue make_obj_error(JSContext *ctx,
                               JSValue obj,
