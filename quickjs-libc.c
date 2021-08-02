@@ -75,6 +75,15 @@ typedef sig_t sighandler_t;
    - add socket calls
 */
 
+#if defined(_WIN32)
+#define popen _popen
+#define pclose _pclose
+#define pipe(x) _pipe(x, 4096, O_BINARY)
+#endif
+#if !defined(PATH_MAX)
+#define PATH_MAX MAX_PATH
+#endif
+
 typedef struct {
     struct list_head link;
     int fd;

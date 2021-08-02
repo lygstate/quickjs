@@ -29,18 +29,22 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <unistd.h>
 #include <errno.h>
 #include <time.h>
+#if !defined(_MSC_VER)
+#include <unistd.h>
 #include <dirent.h>
 #include <ftw.h>
+#endif
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs-libc.h"
 
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
+#if !defined(_MSC_VER)
 #define CONFIG_AGENT
+#endif
 
 #define CMD_NAME "run-test262"
 
@@ -372,7 +376,9 @@ static void enumerate_tests(const char *path)
 {
     namelist_t *lp = &test_list;
     int start = lp->count;
+#if !defined(_MSC_VER)
     ftw(path, add_test_file, 100);
+#endif
     qsort(lp->array + start, lp->count - start, sizeof(*lp->array),
           namelist_cmp_indirect);
 }
