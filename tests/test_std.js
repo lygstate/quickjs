@@ -276,6 +276,8 @@ test_file2();
 test_getline();
 test_popen();
 test_os();
-test_os_exec();
+if (os.platform != 'win32') {
+    test_os_exec();
+}
 test_timer();
 test_ext_json();
