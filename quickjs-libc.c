@@ -2511,39 +2511,34 @@ static JSValue js_os_sleep(JSContext *ctx, JSValueConst this_val,
     ret = js_get_errno(pal_msleep(delay));
     return JS_NewInt32(ctx, ret);
 }
-
-#if defined(_WIN32)
-static char *realpath(const char *path, char *buf)
-{
-    if (!_fullpath(buf, path, PATH_MAX)) {
-        errno = ENOENT;
-        return NULL;
-    } else {
-        return buf;
-    }
-}
-#endif
-
 /* return [path, errorcode] */
 static JSValue js_os_realpath(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
     const char *path;
-    char buf[PATH_MAX], *res;
+    char *cwd;
+    JSValue result;
+    char *buf = NULL;
+    int buf_capacity = 128;
     int err;
 
     path = JS_ToCString(ctx, argv[0]);
     if (!path)
         return JS_EXCEPTION;
-    res = realpath(path, buf);
-    JS_FreeCString(ctx, path);
-    if (!res) {
-        buf[0] = '\0';
-        err = errno;
+    cwd = pal_getcwd();
+    if (cwd == NULL) {
+        err = -1;
     } else {
-        err = 0;
+        err = pal_joinpath(1, cwd, path, &buf, 0, &buf_capacity);
+        if (err >= 0) {
+            err = 0;
+        }
+        pal_free(cwd);
     }
-    return make_string_error(ctx, buf, err);
+    JS_FreeCString(ctx, path);
+    result = make_string_error(ctx, buf, js_get_errno(err));
+    pal_free(buf);
+    return result;
 }
 
 static JSValue js_os_symlink(JSContext *ctx, JSValueConst this_val,
