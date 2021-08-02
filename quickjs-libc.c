@@ -1696,113 +1696,42 @@ static JSValue js_os_isatty(JSContext *ctx, JSValueConst this_val,
     int32_t fd;
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-    return JS_NewBool(ctx, (isatty(fd) != 0));
+    return JS_NewBool(ctx, (pal_tty_isatty(fd) != 0));
 }
 
-#if defined(_WIN32)
 static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
     int32_t fd;
-    HANDLE handle;
-    CONSOLE_SCREEN_BUFFER_INFO info;
+    int width = 0;
+    int height = 0;
     JSValue obj;
 
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-    handle = (HANDLE)_get_osfhandle(fd);
-
-    if (!GetConsoleScreenBufferInfo(handle, &info))
-        return JS_NULL;
-    obj = JS_NewArray(ctx);
-    if (JS_IsException(obj))
-        return obj;
-    JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, info.dwSize.X), JS_PROP_C_W_E);
-    JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, info.dwSize.Y), JS_PROP_C_W_E);
-    return obj;
-}
-
-/* Windows 10 built-in VT100 emulation */
-#define __ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
-#define __ENABLE_VIRTUAL_TERMINAL_INPUT 0x0200
-
-static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
-                               int argc, JSValueConst *argv)
-{
-    int fd;
-    HANDLE handle;
-
-    if (JS_ToInt32(ctx, &fd, argv[0]))
-        return JS_EXCEPTION;
-    handle = (HANDLE)_get_osfhandle(fd);
-    SetConsoleMode(handle, ENABLE_WINDOW_INPUT | __ENABLE_VIRTUAL_TERMINAL_INPUT);
-    _setmode(fd, _O_BINARY);
-    if (fd == 0) {
-        handle = (HANDLE)_get_osfhandle(1); /* corresponding output */
-        SetConsoleMode(handle, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | __ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-    }
-    return JS_UNDEFINED;
-}
-#else
-static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv)
-{
-    int fd;
-    struct winsize ws;
-    JSValue obj;
-
-    if (JS_ToInt32(ctx, &fd, argv[0]))
-        return JS_EXCEPTION;
-    if (ioctl(fd, TIOCGWINSZ, &ws) == 0 &&
-        ws.ws_col >= 4 && ws.ws_row >= 4) {
+    if (pal_tty_getwinsize(fd, &width, &height) == 0) {
         obj = JS_NewArray(ctx);
         if (JS_IsException(obj))
             return obj;
-        JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, ws.ws_col), JS_PROP_C_W_E);
-        JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, ws.ws_row), JS_PROP_C_W_E);
+        JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, width), JS_PROP_C_W_E);
+        JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, height), JS_PROP_C_W_E);
         return obj;
     } else {
         return JS_NULL;
     }
 }
 
-static struct termios oldtty;
-
-static void term_exit(void)
-{
-    tcsetattr(0, TCSANOW, &oldtty);
-}
-
 /* XXX: should add a way to go back to normal mode */
 static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    struct termios tty;
     int32_t fd;
 
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-
-    memset(&tty, 0, sizeof(tty));
-    tcgetattr(fd, &tty);
-    oldtty = tty;
-
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
-                          |INLCR|IGNCR|ICRNL|IXON);
-    tty.c_oflag |= OPOST;
-    tty.c_lflag &= ~(ECHO|ECHONL|ICANON|IEXTEN);
-    tty.c_cflag &= ~(CSIZE|PARENB);
-    tty.c_cflag |= CS8;
-    tty.c_cc[VMIN] = 1;
-    tty.c_cc[VTIME] = 0;
-
-    tcsetattr(fd, TCSANOW, &tty);
-
-    atexit(term_exit);
+    pal_tty_setraw(fd);
     return JS_UNDEFINED;
 }
-
-#endif /* !_WIN32 */
 
 static JSValue js_os_remove(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
