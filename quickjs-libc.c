@@ -854,7 +854,7 @@ static void js_std_file_finalizer(JSRuntime *rt, JSValue val)
 
 static ssize_t js_get_errno(ssize_t ret)
 {
-    if (ret == -1)
+    if (ret < 0)
         ret = -errno;
     return ret;
 }
