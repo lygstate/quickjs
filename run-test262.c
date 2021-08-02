@@ -435,7 +435,7 @@ static void add_helpers(JSContext *ctx);
 static int64_t get_clock_ms(void)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    pal_clock_gettime(PAL_CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 }
 
@@ -663,7 +663,7 @@ static JSValue js_agent_sleep(JSContext *ctx, JSValue this_val,
     uint32_t duration;
     if (JS_ToUint32(ctx, &duration, argv[0]))
         return JS_EXCEPTION;
-    usleep(duration * 1000);
+    pal_msleep(duration);
     return JS_UNDEFINED;
 }
 
