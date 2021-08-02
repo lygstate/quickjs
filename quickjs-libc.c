@@ -1628,12 +1628,7 @@ static JSValue js_os_open(JSContext *ctx, JSValueConst this_val,
     } else {
         mode = 0666;
     }
-#if defined(_WIN32)
-    /* force binary mode by default */
-    if (!(flags & O_TEXT))
-        flags |= O_BINARY;
-#endif
-    ret = js_get_errno(open(filename, flags, mode));
+    ret = js_get_errno(pal_open(filename, flags, mode));
     JS_FreeCString(ctx, filename);
     return JS_NewInt32(ctx, ret);
 }
@@ -1644,7 +1639,7 @@ static JSValue js_os_close(JSContext *ctx, JSValueConst this_val,
     int32_t fd, ret;
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-    ret = js_get_errno(close(fd));
+    ret = js_get_errno(pal_close(fd));
     return JS_NewInt32(ctx, ret);
 }
 
@@ -1662,9 +1657,7 @@ static JSValue js_os_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[2]))
         return JS_EXCEPTION;
-    ret = lseek(fd, pos, whence);
-    if (ret == -1)
-        ret = -errno;
+    ret = js_get_errno(pal_lseek(fd, pos, whence));
     if (is_bigint)
         return JS_NewBigInt64(ctx, ret);
     else
@@ -1692,9 +1685,9 @@ static JSValue js_os_read_write(JSContext *ctx, JSValueConst this_val,
     if (pos + len > size)
         return JS_ThrowRangeError(ctx, "read/write array buffer overflow");
     if (magic)
-        ret = js_get_errno(write(fd, buf + pos, len));
+        ret = js_get_errno(pal_write(fd, buf + pos, len));
     else
-        ret = js_get_errno(read(fd, buf + pos, len));
+        ret = js_get_errno(pal_read(fd, buf + pos, len));
     return JS_NewInt64(ctx, ret);
 }
 
@@ -2132,7 +2125,7 @@ static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
             uint8_t buf[16];
             int ret;
             for(;;) {
-                ret = read(ps->read_fd, buf, sizeof(buf));
+                ret = pal_read(ps->read_fd, buf, sizeof(buf));
                 if (ret >= 0)
                     break;
                 if (errno != EAGAIN && errno != EINTR)
@@ -3061,7 +3054,7 @@ static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
     int pipe_fds[2], ret;
     JSValue obj;
 
-    ret = pipe(pipe_fds);
+    ret = pal_pipe(pipe_fds, 4096);
     if (ret < 0)
         return JS_NULL;
     obj = JS_NewArray(ctx);
@@ -3096,7 +3089,7 @@ static JSValue js_os_dup(JSContext *ctx, JSValueConst this_val,
 
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-    ret = js_get_errno(dup(fd));
+    ret = js_get_errno(pal_dup(fd));
     return JS_NewInt32(ctx, ret);
 }
 
@@ -3110,7 +3103,7 @@ static JSValue js_os_dup2(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &fd2, argv[1]))
         return JS_EXCEPTION;
-    ret = js_get_errno(dup2(fd, fd2));
+    ret = js_get_errno(pal_dup2(fd, fd2));
     return JS_NewInt32(ctx, ret);
 }
 
@@ -3180,13 +3173,13 @@ static JSWorkerMessagePipe *js_new_message_pipe(void)
     JSWorkerMessagePipe *ps;
     int pipe_fds[2];
 
-    if (pipe(pipe_fds) < 0)
+    if (pal_pipe(pipe_fds, 4096) < 0)
         return NULL;
 
     ps = malloc(sizeof(*ps));
     if (!ps) {
-        close(pipe_fds[0]);
-        close(pipe_fds[1]);
+        pal_close(pipe_fds[0]);
+        pal_close(pipe_fds[1]);
         return NULL;
     }
     ps->ref_count = 1;
@@ -3232,8 +3225,8 @@ static void js_free_message_pipe(JSWorkerMessagePipe *ps)
             js_free_message(msg);
         }
         pal_mutex_destroy(&ps->mutex);
-        close(ps->read_fd);
-        close(ps->write_fd);
+        pal_close(ps->read_fd);
+        pal_close(ps->write_fd);
         free(ps);
     }
 }
@@ -3471,7 +3464,7 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
         uint8_t ch = '\0';
         int ret;
         for(;;) {
-            ret = write(ps->write_fd, &ch, 1);
+            ret = pal_write(ps->write_fd, &ch, 1);
             if (ret == 1)
                 break;
             if (ret < 0 && (errno != EAGAIN || errno != EINTR))
@@ -3577,10 +3570,6 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     OS_FLAG(O_CREAT),
     OS_FLAG(O_EXCL),
     OS_FLAG(O_TRUNC),
-#if defined(_WIN32)
-    OS_FLAG(O_BINARY),
-    OS_FLAG(O_TEXT),
-#endif
     JS_CFUNC_DEF("close", 1, js_os_close ),
     JS_CFUNC_DEF("seek", 3, js_os_seek ),
     JS_CFUNC_MAGIC_DEF("read", 4, js_os_read_write, 0 ),
