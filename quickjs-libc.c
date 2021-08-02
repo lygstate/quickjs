@@ -2513,22 +2513,7 @@ static JSValue js_os_sleep(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (delay < 0)
         delay = 0;
-#if defined(_WIN32)
-    {
-        if (delay > INT32_MAX)
-            delay = INT32_MAX;
-        Sleep(delay);
-        ret = 0;
-    }
-#else
-    {
-        struct timespec ts;
-
-        ts.tv_sec = delay / 1000;
-        ts.tv_nsec = (delay % 1000) * 1000000;
-        ret = js_get_errno(nanosleep(&ts, NULL));
-    }
-#endif
+    ret = js_get_errno(pal_msleep(delay));
     return JS_NewInt32(ctx, ret);
 }
 
