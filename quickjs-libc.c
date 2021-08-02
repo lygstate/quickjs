@@ -123,7 +123,7 @@ static BOOL my_isdigit(int c)
 }
 
 static JSValue js_printf_internal(JSContext *ctx,
-                                  int argc, JSValueConst *argv, FILE *fp)
+                                  int argc, JSValueConst *argv, pal_file_t fp)
 {
     char fmtbuf[32];
     uint8_t cbuf[UTF8_CHAR_LEN_MAX+1];
@@ -323,8 +323,8 @@ static JSValue js_printf_internal(JSContext *ctx,
     if (dbuf.error) {
         res = JS_ThrowOutOfMemory(ctx);
     } else {
-        if (fp) {
-            len = fwrite(dbuf.buf, 1, dbuf.size, fp);
+        if (fp >= 0) {
+            len = pal_write(fp, dbuf.buf, (int)dbuf.size);
             res = JS_NewInt32(ctx, len);
         } else {
             res = JS_NewStringLen(ctx, (char *)dbuf.buf, dbuf.size);
@@ -802,7 +802,7 @@ static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
 static JSClassID js_std_file_class_id;
 
 typedef struct {
-    FILE *f;
+    pal_file_t f;
     BOOL close_in_finalizer;
     BOOL is_popen;
 } JSSTDFile;
@@ -811,11 +811,11 @@ static void js_std_file_finalizer(JSRuntime *rt, JSValue val)
 {
     JSSTDFile *s = JS_GetOpaque(val, js_std_file_class_id);
     if (s) {
-        if (s->f && s->close_in_finalizer) {
+        if (s->f >= 0 && s->close_in_finalizer) {
             if (s->is_popen)
-                pclose(s->f);
+                pal_pclose(s->f);
             else
-                fclose(s->f);
+                pal_close(s->f);
         }
         js_free_rt(rt, s);
     }
@@ -852,7 +852,7 @@ static JSValue js_std_parseExtJSON(JSContext *ctx, JSValueConst this_val,
     return obj;
 }
 
-static JSValue js_new_std_file(JSContext *ctx, FILE *f,
+static JSValue js_new_std_file(JSContext *ctx, pal_file_t f,
                                BOOL close_in_finalizer,
                                BOOL is_popen)
 {
@@ -884,8 +884,9 @@ static JSValue js_std_open(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
     const char *filename, *mode = NULL;
-    FILE *f;
+    pal_file_t f;
     int err;
+    int flags;
 
     filename = JS_ToCString(ctx, argv[0]);
     if (!filename)
@@ -893,13 +894,14 @@ static JSValue js_std_open(JSContext *ctx, JSValueConst this_val,
     mode = JS_ToCString(ctx, argv[1]);
     if (!mode)
         goto fail;
-    if (mode[strspn(mode, "rwa+b")] != '\0') {
-        JS_ThrowTypeError(ctx, "invalid file mode");
+    flags = pal_open_flags(mode, "rwa+b");
+    if (flags < 0) {
+        JS_ThrowTypeError(ctx, "invalid file mode:%s", mode);
         goto fail;
     }
 
-    f = fopen(filename, mode);
-    if (!f)
+    f = pal_open(filename, flags, -1);
+    if (f < 0)
         err = errno;
     else
         err = 0;
@@ -907,7 +909,7 @@ static JSValue js_std_open(JSContext *ctx, JSValueConst this_val,
         js_set_error_object(ctx, argv[2], err);
     JS_FreeCString(ctx, filename);
     JS_FreeCString(ctx, mode);
-    if (!f)
+    if (f < 0)
         return JS_NULL;
     return js_new_std_file(ctx, f, TRUE, FALSE);
  fail:
@@ -920,8 +922,9 @@ static JSValue js_std_popen(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
     const char *filename, *mode = NULL;
-    FILE *f;
+    pal_file_t f;
     int err;
+    int flags;
 
     filename = JS_ToCString(ctx, argv[0]);
     if (!filename)
@@ -929,13 +932,14 @@ static JSValue js_std_popen(JSContext *ctx, JSValueConst this_val,
     mode = JS_ToCString(ctx, argv[1]);
     if (!mode)
         goto fail;
-    if (mode[strspn(mode, "rw")] != '\0') {
-        JS_ThrowTypeError(ctx, "invalid file mode");
+    flags = pal_open_flags(mode, "rw");
+    if (flags < 0) {
+        JS_ThrowTypeError(ctx, "invalid file mode: %s", mode);
         goto fail;
     }
 
-    f = popen(filename, mode);
-    if (!f)
+    f = pal_popen(filename, flags);
+    if (f < 0)
         err = errno;
     else
         err = 0;
@@ -943,7 +947,7 @@ static JSValue js_std_popen(JSContext *ctx, JSValueConst this_val,
         js_set_error_object(ctx, argv[2], err);
     JS_FreeCString(ctx, filename);
     JS_FreeCString(ctx, mode);
-    if (!f)
+    if (f < 0)
         return JS_NULL;
     return js_new_std_file(ctx, f, TRUE, TRUE);
  fail:
@@ -956,7 +960,7 @@ static JSValue js_std_fdopen(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
     const char *mode;
-    FILE *f;
+    pal_file_t f;
     int fd, err;
 
     if (JS_ToInt32(ctx, &fd, argv[0]))
@@ -969,15 +973,15 @@ static JSValue js_std_fdopen(JSContext *ctx, JSValueConst this_val,
         goto fail;
     }
 
-    f = fdopen(fd, mode);
-    if (!f)
+    f = pal_dup(fd);
+    if (f < 0)
         err = errno;
     else
         err = 0;
     if (argc >= 3)
         js_set_error_object(ctx, argv[2], err);
     JS_FreeCString(ctx, mode);
-    if (!f)
+    if (f < 0)
         return JS_NULL;
     return js_new_std_file(ctx, f, TRUE, FALSE);
  fail:
@@ -988,11 +992,10 @@ static JSValue js_std_fdopen(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_tmpfile(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
-    FILE *f;
-    f = tmpfile();
+    pal_file_t f = pal_file_open_tmp();
     if (argc >= 1)
         js_set_error_object(ctx, argv[0], f ? 0 : errno);
-    if (!f)
+    if (f < 0)
         return JS_NULL;
     return js_new_std_file(ctx, f, TRUE, FALSE);
 }
@@ -1000,23 +1003,23 @@ static JSValue js_std_tmpfile(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_sprintf(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {
-    return js_printf_internal(ctx, argc, argv, NULL);
+    return js_printf_internal(ctx, argc, argv, -1);
 }
 
 static JSValue js_std_printf(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    return js_printf_internal(ctx, argc, argv, stdout);
+    return js_printf_internal(ctx, argc, argv, pal_file_get(PAL_FILE_STDOUT));
 }
 
-static FILE *js_std_file_get(JSContext *ctx, JSValueConst obj)
+static pal_file_t js_std_file_get(JSContext *ctx, JSValueConst obj)
 {
     JSSTDFile *s = JS_GetOpaque2(ctx, obj, js_std_file_class_id);
     if (!s)
-        return NULL;
-    if (!s->f) {
+        return -1;
+    if (s->f < 0) {
         JS_ThrowTypeError(ctx, "invalid file handle");
-        return NULL;
+        return -1;
     }
     return s->f;
 }
@@ -1024,16 +1027,16 @@ static FILE *js_std_file_get(JSContext *ctx, JSValueConst obj)
 static JSValue js_std_file_puts(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv, int magic)
 {
-    FILE *f;
+    pal_file_t f;
     int i;
     const char *str;
     size_t len;
 
     if (magic == 0) {
-        f = stdout;
+        f = pal_file_get(PAL_FILE_STDOUT);
     } else {
         f = js_std_file_get(ctx, this_val);
-        if (!f)
+        if (f < 0)
             return JS_EXCEPTION;
     }
 
@@ -1041,7 +1044,7 @@ static JSValue js_std_file_puts(JSContext *ctx, JSValueConst this_val,
         str = JS_ToCStringLen(ctx, &len, argv[i]);
         if (!str)
             return JS_EXCEPTION;
-        fwrite(str, 1, len, f);
+        pal_write(f, str, (uint32_t)len);
         JS_FreeCString(ctx, str);
     }
     return JS_UNDEFINED;
@@ -1054,21 +1057,21 @@ static JSValue js_std_file_close(JSContext *ctx, JSValueConst this_val,
     int err;
     if (!s)
         return JS_EXCEPTION;
-    if (!s->f)
+    if (s->f < 0)
         return JS_ThrowTypeError(ctx, "invalid file handle");
     if (s->is_popen)
-        err = js_get_errno(pclose(s->f));
+        err = js_get_errno(pal_pclose(s->f));
     else
-        err = js_get_errno(fclose(s->f));
-    s->f = NULL;
+        err = js_get_errno(pal_close(s->f));
+    s->f = -1;
     return JS_NewInt32(ctx, err);
 }
 
 static JSValue js_std_file_printf(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
     return js_printf_internal(ctx, argc, argv, f);
 }
@@ -1076,25 +1079,21 @@ static JSValue js_std_file_printf(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_file_flush(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    fflush(f);
+    pal_fsync(f);
     return JS_UNDEFINED;
 }
 
 static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv, int is_bigint)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     int64_t pos;
-    if (!f)
+    if (f < 0)
         return JS_EXCEPTION;
-#if defined(__linux__)
-    pos = ftello(f);
-#else
-    pos = ftell(f);
-#endif
+    pos = pal_lseek(f, 0, SEEK_CUR);
     if (is_bigint)
         return JS_NewBigInt64(ctx, pos);
     else
@@ -1104,71 +1103,67 @@ static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_file_seek(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     int64_t pos;
-    int whence, ret;
-    if (!f)
+    int whence;
+    int ret = 0;
+    if (f < 0)
         return JS_EXCEPTION;
     if (JS_ToInt64Ext(ctx, &pos, argv[0]))
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[1]))
         return JS_EXCEPTION;
-#if defined(__linux__)
-    ret = fseeko(f, pos, whence);
-#else
-    ret = fseek(f, pos, whence);
-#endif
-    if (ret < 0)
+    if (pal_lseek(f, pos, whence) < 0) {
         ret = -errno;
+    }
     return JS_NewInt32(ctx, ret);
 }
 
 static JSValue js_std_file_eof(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    return JS_NewBool(ctx, feof(f));
+    return JS_NewBool(ctx, pal_eof(f));
 }
 
 static JSValue js_std_file_error(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    return JS_NewBool(ctx, ferror(f));
+    return JS_NewBool(ctx, 0);
 }
 
 static JSValue js_std_file_clearerr(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    clearerr(f);
     return JS_UNDEFINED;
 }
 
 static JSValue js_std_file_fileno(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    return JS_NewInt32(ctx, fileno(f));
+    return JS_NewInt32(ctx, f);
 }
 
 static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv, int magic)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     uint64_t pos, len;
     size_t size, ret;
     uint8_t *buf;
 
-    if (!f)
+    if (f < 0)
         return JS_EXCEPTION;
     if (JS_ToIndex(ctx, &pos, argv[1]))
         return JS_EXCEPTION;
@@ -1180,9 +1175,9 @@ static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
     if (pos + len > size)
         return JS_ThrowRangeError(ctx, "read/write array buffer overflow");
     if (magic)
-        ret = fwrite(buf + pos, 1, len, f);
+        ret = pal_write(f, buf + pos, len);
     else
-        ret = fread(buf + pos, 1, len, f);
+        ret = pal_read(f, buf + pos, len);
     return JS_NewInt64(ctx, ret);
 }
 
@@ -1190,17 +1185,17 @@ static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_file_getline(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     int c;
     DynBuf dbuf;
     JSValue obj;
 
-    if (!f)
+    if (f < 0)
         return JS_EXCEPTION;
 
     js_std_dbuf_init(ctx, &dbuf);
     for(;;) {
-        c = fgetc(f);
+        c = pal_fgetc(f);
         if (c == EOF) {
             if (dbuf.size == 0) {
                 /* EOF */
@@ -1226,7 +1221,7 @@ static JSValue js_std_file_getline(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_file_readAsString(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     int c;
     DynBuf dbuf;
     JSValue obj;
@@ -1234,7 +1229,7 @@ static JSValue js_std_file_readAsString(JSContext *ctx, JSValueConst this_val,
     size_t max_size;
     JSValueConst max_size_val;
 
-    if (!f)
+    if (f < 0)
         return JS_EXCEPTION;
 
     if (argc >= 1)
@@ -1251,7 +1246,7 @@ static JSValue js_std_file_readAsString(JSContext *ctx, JSValueConst this_val,
 
     js_std_dbuf_init(ctx, &dbuf);
     while (max_size != 0) {
-        c = fgetc(f);
+        c = pal_fgetc(f);
         if (c == EOF)
             break;
         if (dbuf_putc(&dbuf, c)) {
@@ -1268,22 +1263,22 @@ static JSValue js_std_file_readAsString(JSContext *ctx, JSValueConst this_val,
 static JSValue js_std_file_getByte(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
-    if (!f)
+    pal_file_t f = js_std_file_get(ctx, this_val);
+    if (f < 0)
         return JS_EXCEPTION;
-    return JS_NewInt32(ctx, fgetc(f));
+    return JS_NewInt32(ctx, pal_fgetc(f));
 }
 
 static JSValue js_std_file_putByte(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    FILE *f = js_std_file_get(ctx, this_val);
+    pal_file_t f = js_std_file_get(ctx, this_val);
     int c;
-    if (!f)
+    if (f < 0)
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &c, argv[0]))
         return JS_EXCEPTION;
-    c = fputc(c, f);
+    c = pal_fputc(c, f);
     return JS_NewInt32(ctx, c);
 }
 
@@ -1373,9 +1368,9 @@ static int js_std_init(JSContext *ctx, JSModuleDef *m)
 
     JS_SetModuleExportList(ctx, m, js_std_funcs,
                            countof(js_std_funcs));
-    JS_SetModuleExport(ctx, m, "in", js_new_std_file(ctx, stdin, FALSE, FALSE));
-    JS_SetModuleExport(ctx, m, "out", js_new_std_file(ctx, stdout, FALSE, FALSE));
-    JS_SetModuleExport(ctx, m, "err", js_new_std_file(ctx, stderr, FALSE, FALSE));
+    JS_SetModuleExport(ctx, m, "in", js_new_std_file(ctx, pal_file_get(PAL_FILE_STDIN), FALSE, FALSE));
+    JS_SetModuleExport(ctx, m, "out", js_new_std_file(ctx, pal_file_get(PAL_FILE_STDOUT), FALSE, FALSE));
+    JS_SetModuleExport(ctx, m, "err", js_new_std_file(ctx, pal_file_get(PAL_FILE_STDERR), FALSE, FALSE));
     return 0;
 }
 
@@ -2793,8 +2788,8 @@ static void *worker_func(void *opaque)
 
     rt = JS_NewRuntime();
     if (rt == NULL) {
-        fprintf(stderr, "JS_NewRuntime failure");
-        exit(1);
+        pal_writes(pal_file_get(PAL_FILE_STDERR), "JS_NewRuntime failure");
+        pal_exit(1);
     }
     js_std_init_handlers(rt);
 
@@ -2809,7 +2804,7 @@ static void *worker_func(void *opaque)
        not needed */
     ctx = js_worker_new_context_func(rt);
     if (ctx == NULL) {
-        fprintf(stderr, "JS_NewContext failure");
+        pal_writes(pal_file_get(PAL_FILE_STDERR), "JS_NewContext failure");
     }
 
     JS_SetCanBlock(rt, TRUE);
@@ -3225,15 +3220,16 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
     size_t len;
 
     for(i = 0; i < argc; i++) {
-        if (i != 0)
-            putchar(' ');
+        if (i != 0) {
+            pal_fputc(' ', pal_file_get(PAL_FILE_STDOUT));
+        }
         str = JS_ToCStringLen(ctx, &len, argv[i]);
         if (!str)
             return JS_EXCEPTION;
-        fwrite(str, 1, len, stdout);
+        pal_write(pal_file_get(PAL_FILE_STDOUT), str, (int)len);
         JS_FreeCString(ctx, str);
     }
-    putchar('\n');
+    pal_fputc('\n', pal_file_get(PAL_FILE_STDOUT));
     return JS_UNDEFINED;
 }
 
@@ -3273,8 +3269,8 @@ void js_std_init_handlers(JSRuntime *rt)
 
     ts = malloc(sizeof(*ts));
     if (!ts) {
-        fprintf(stderr, "Could not allocate memory for the worker");
-        exit(1);
+        pal_writes(pal_file_get(PAL_FILE_STDERR), "Could not allocate memory for the worker");
+        pal_exit(1);
     }
     memset(ts, 0, sizeof(*ts));
     init_list_head(&ts->os_rw_handlers);
@@ -3329,13 +3325,14 @@ void js_std_free_handlers(JSRuntime *rt)
     JS_SetRuntimeOpaque(rt, NULL); /* fail safe */
 }
 
-static int js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
+static int js_dump_obj(JSContext *ctx, pal_file_t f, JSValueConst val)
 {
     const char *str;
 
     str = JS_ToCString(ctx, val);
     if (str) {
-        fprintf(f, "%s\n", str);
+        pal_writes(f, str);
+        pal_writes(f, "\n");
         JS_FreeCString(ctx, str);
         return 0;
     }  else {
@@ -3348,7 +3345,7 @@ static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
     JSValue val;
     BOOL is_error;
     int message_dumped = 0;
-    FILE *errf = stderr;
+    const pal_file_t errf = pal_file_get(PAL_FILE_STDERR);
 
     is_error = JS_IsError(ctx, exception_val);
     message_dumped = js_dump_obj(ctx, errf, exception_val) == 0;
@@ -3360,7 +3357,7 @@ static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
         JS_FreeValue(ctx, val);
     }
     if (!message_dumped) {
-        fprintf(errf, "[exception]\n");
+        pal_writes(errf, "[exception]\n");
     }
     if (is_error) {
         val = JS_GetPropertyStr(ctx, exception_val, "stack");
@@ -3385,7 +3382,7 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
                                       BOOL is_handled, void *opaque)
 {
     if (!is_handled) {
-        fprintf(stderr, "Possibly unhandled promise rejection: ");
+        pal_writes(pal_file_get(PAL_FILE_STDERR), "Possibly unhandled promise rejection: ");
         js_std_dump_error1(ctx, reason);
     }
 }
