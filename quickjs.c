@@ -42,6 +42,7 @@
 
 #include "cutils.h"
 #include "list.h"
+#include "pal-port.h"
 #include "quickjs.h"
 #include "quickjs-debugger.h"
 #include "libregexp.h"
