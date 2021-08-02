@@ -2381,7 +2381,7 @@ static JSValue js_os_chdir(JSContext *ctx, JSValueConst this_val,
     target = JS_ToCString(ctx, argv[0]);
     if (!target)
         return JS_EXCEPTION;
-    err = js_get_errno(chdir(target));
+    err = js_get_errno(pal_chdir(target));
     JS_FreeCString(ctx, target);
     return JS_NewInt32(ctx, err);
 }
