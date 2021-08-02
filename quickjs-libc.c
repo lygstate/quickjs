@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
@@ -461,15 +462,6 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
-
-#if defined(_WIN32)
-static JSModuleDef *js_module_loader_so(JSContext *ctx,
-                                        const char *module_name)
-{
-    JS_ThrowReferenceError(ctx, "shared library modules are not supported yet");
-    return NULL;
-}
-#else
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
@@ -491,7 +483,7 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
     }
 
     /* C module */
-    hd = dlopen(filename, RTLD_NOW | RTLD_LOCAL);
+    hd = pal_dlopen(filename, PAL_RTLD_NOW | PAL_RTLD_LOCAL);
     if (filename != module_name)
         js_free(ctx, filename);
     if (!hd) {
@@ -500,7 +492,7 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
         goto fail;
     }
 
-    init = dlsym(hd, "js_init_module");
+    init = (JSInitModuleFunc*)pal_dlsym(hd, "js_init_module");
     if (!init) {
         JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found",
                                module_name);
@@ -512,22 +504,38 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
         JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
                                module_name);
     fail:
-        if (hd)
-            dlclose(hd);
+        if (hd) {
+            pal_dlclose(hd);
+        }
         return NULL;
     }
     return m;
 }
-#endif /* !_WIN32 */
+
+int js_module_name_is_uri(const char *module_name) {
+    const char*schema_separator = strstr(module_name, "://");
+    if (schema_separator == NULL) {
+        return 0;
+    }
+    for (const char*b = module_name; b < schema_separator; ++b) {
+        unsigned char c = *b;
+        if (!isalpha(c)) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
                               JS_BOOL use_realpath, JS_BOOL is_main)
 {
     JSModuleDef *m;
-    char buf[PATH_MAX + 16];
     JSValue meta_obj;
     JSAtom module_name_atom;
     const char *module_name;
+    char *buf = NULL;
+    int buf_capacity = 128;
+    int ret = -1;
 
     assert(JS_VALUE_GET_TAG(func_val) == JS_TAG_MODULE);
     m = JS_VALUE_GET_PTR(func_val);
@@ -536,41 +544,54 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     module_name = JS_AtomToCString(ctx, module_name_atom);
     JS_FreeAtom(ctx, module_name_atom);
     if (!module_name)
-        return -1;
-    if (!strchr(module_name, ':')) {
-        strcpy(buf, "file://");
-#if !defined(_WIN32)
+        return ret;
+    if (!js_module_name_is_uri(module_name)) {
         /* realpath() cannot be used with modules compiled with qjsc
            because the corresponding module source code is not
            necessarily present */
+        static const char file_uri_schema[] = "file://";
+        static const int file_uri_schema_len = sizeof(file_uri_schema) - 1;
         if (use_realpath) {
-            char *res = realpath(module_name, buf + strlen(buf));
-            if (!res) {
+            char *cwd = pal_getcwd();
+            if (pal_joinpath(1, cwd, module_name, &buf, file_uri_schema_len, &buf_capacity) < 0) {
                 JS_ThrowTypeError(ctx, "realpath failure");
                 JS_FreeCString(ctx, module_name);
                 return -1;
             }
-        } else
-#endif
-        {
-            pstrcat(buf, sizeof(buf), module_name);
+        } else {
+            int module_name_len = (int)strlen(module_name);
+            buf_capacity = file_uri_schema_len + module_name_len + 1;
+            buf = pal_mallocz(buf_capacity);
+            memcpy(buf + file_uri_schema_len, module_name, module_name_len + 1);
         }
+        memcpy(buf, file_uri_schema, file_uri_schema_len);
+    #if defined(_WIN32)
+        for (char *x =buf + file_uri_schema_len; *x; x++) {
+            if (*x == '\\') {
+                *x = '/';
+            }
+        }
+    #endif
     } else {
-        pstrcpy(buf, sizeof(buf), module_name);
+        int module_name_len = (int)strlen(module_name);
+        buf = pal_mallocz(module_name_len + 1);
+        memcpy(buf, module_name, module_name_len + 1);
     }
     JS_FreeCString(ctx, module_name);
 
     meta_obj = JS_GetImportMeta(ctx, m);
-    if (JS_IsException(meta_obj))
-        return -1;
-    JS_DefinePropertyValueStr(ctx, meta_obj, "url",
-                              JS_NewString(ctx, buf),
-                              JS_PROP_C_W_E);
-    JS_DefinePropertyValueStr(ctx, meta_obj, "main",
-                              JS_NewBool(ctx, is_main),
-                              JS_PROP_C_W_E);
-    JS_FreeValue(ctx, meta_obj);
-    return 0;
+    if (!JS_IsException(meta_obj)) {
+        JS_DefinePropertyValueStr(ctx, meta_obj, "url",
+                                JS_NewString(ctx, buf),
+                                JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, meta_obj, "main",
+                                JS_NewBool(ctx, is_main),
+                                JS_PROP_C_W_E);
+        JS_FreeValue(ctx, meta_obj);
+        ret = 0;
+        pal_free(buf);
+    }
+    return ret;
 }
 
 #if defined(_WIN32)
