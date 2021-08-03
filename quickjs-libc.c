@@ -35,31 +35,15 @@
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
-#if !defined(_MSC_VER)
-#include <unistd.h>
-#include <sys/time.h>
-#endif
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
 #include <sys/utime.h>
 #include <io.h>
-#else
-#include <dlfcn.h>
-#include <termios.h>
-#include <sys/ioctl.h>
-#include <sys/wait.h>
-
+#endif
 #if defined(__APPLE__)
-typedef sig_t sighandler_t;
-#if !defined(environ)
-#include <crt_externs.h>
-#define environ (*_NSGetEnviron())
-#endif
+#include <sys/select.h>
 #endif /* __APPLE__ */
-
-#endif
-
 /* enable the os.Worker API. It relies on threads */
 #define USE_WORKER
 
@@ -70,15 +54,6 @@ typedef sig_t sighandler_t;
 /* TODO:
    - add socket calls
 */
-
-#if defined(_WIN32)
-#define popen _popen
-#define pclose _pclose
-#define pipe(x) _pipe(x, 4096, O_BINARY)
-#endif
-#if !defined(PATH_MAX)
-#define PATH_MAX MAX_PATH
-#endif
 
 typedef struct {
     struct list_head link;
@@ -1675,7 +1650,14 @@ static void os_signal_handler(int sig_num)
     os_pending_signals |= ((uint64_t)1 << sig_num);
 }
 
+#if __STDC_HOSTED__ == 1 && __STDCPP_THREADS__ == 1
 #if defined(_WIN32)
+typedef void (*sighandler_t)(int sig_num);
+#endif
+#if defined(__APPLE__)
+typedef sig_t sighandler_t;
+#endif /* __APPLE__ */
+#else
 typedef void (*sighandler_t)(int sig_num);
 #endif
 
