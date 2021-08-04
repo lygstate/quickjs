@@ -1606,9 +1606,12 @@ static inline uintptr_t js_get_stack_pointer(void)
 
 static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 {
-    uintptr_t sp;
-    sp = js_get_stack_pointer() - alloca_size;
-    return unlikely(sp < rt->stack_limit);
+    uintptr_t sp = js_get_stack_pointer();
+    /* XXX: May need add check that make sure
+       alloca_size < rt->stack_size,
+       so that rt->stack_limit + alloca_size won't overflow */
+    uintptr_t sp_lowest = rt->stack_limit + alloca_size;
+    return unlikely(sp < sp_lowest);
 }
 #endif
 
@@ -2360,10 +2363,16 @@ JSRuntime *JS_GetRuntime(JSContext *ctx)
 
 static void update_stack_limit(JSRuntime *rt)
 {
-    if (rt->stack_size == 0) {
+    if ((intptr_t)rt->stack_size <= 0) {
+        /* stack_size too big or zero stack size */
         rt->stack_limit = 0; /* no limit */
-    } else {
+    } else if (rt->stack_top > (rt->stack_size + 32)){
+        /* make sure the stack_limit always positive,
+          and reserve final 32 byte for not reach NULL address,
+          otherwise the stack overflow may always happen */
         rt->stack_limit = rt->stack_top - rt->stack_size;
+    } else {
+        rt->stack_limit = 32;
     }
 }
 
