@@ -20686,7 +20686,7 @@ static __exception int next_token(JSParseState *s)
     JSAtom atom;
 
     if (js_check_stack_overflow(s->ctx->rt, 0)) {
-        return js_parse_error(s, "stack overflow");
+        return js_parse_error(s, "pase stack overflow");
     }
 
     free_token(s, &s->token);
@@ -21233,7 +21233,7 @@ static __exception int json_next_token(JSParseState *s)
     JSAtom atom;
 
     if (js_check_stack_overflow(s->ctx->rt, 0)) {
-        return js_parse_error(s, "stack overflow");
+        return js_parse_error(s, "pase stack overflow");
     }
 
     free_token(s, &s->token);
