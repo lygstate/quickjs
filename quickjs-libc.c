@@ -3849,7 +3849,7 @@ void js_std_free_handlers(JSRuntime *rt)
     JS_SetRuntimeOpaque(rt, NULL); /* fail safe */
 }
 
-static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
+static int js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
 {
     const char *str;
 
@@ -3857,8 +3857,9 @@ static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
     if (str) {
         fprintf(f, "%s\n", str);
         JS_FreeCString(ctx, str);
-    } else {
-        fprintf(f, "[exception]\n");
+        return 0;
+    }  else {
+        return -1;
     }
 }
 
@@ -3866,13 +3867,25 @@ static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
 {
     JSValue val;
     BOOL is_error;
+    int message_dumped = 0;
+    FILE *errf = stderr;
 
     is_error = JS_IsError(ctx, exception_val);
-    js_dump_obj(ctx, stderr, exception_val);
+    message_dumped = js_dump_obj(ctx, errf, exception_val) == 0;
+    if (!message_dumped && is_error) {
+        val = JS_GetPropertyStr(ctx, exception_val, "message");
+        if (!JS_IsUndefined(val)) {
+            message_dumped = js_dump_obj(ctx, errf, val) == 0;
+        }
+        JS_FreeValue(ctx, val);
+    }
+    if (!message_dumped) {
+        fprintf(errf, "[exception]\n");
+    }
     if (is_error) {
         val = JS_GetPropertyStr(ctx, exception_val, "stack");
         if (!JS_IsUndefined(val)) {
-            js_dump_obj(ctx, stderr, val);
+            js_dump_obj(ctx, errf, val);
         }
         JS_FreeValue(ctx, val);
     }
