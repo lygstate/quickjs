@@ -3003,7 +3003,7 @@ JSAtom JS_NewAtomUInt32(JSContext *ctx, uint32_t n)
     } else {
         char buf[11];
         JSValue val;
-        snprintf(buf, sizeof(buf), "%u", n);
+        snprintf(buf, sizeof(buf), "%"PRIu32, n);
         val = JS_NewString(ctx, buf);
         if (JS_IsException(val))
             return JS_ATOM_NULL;
@@ -3060,7 +3060,7 @@ static const char *JS_AtomGetStrRT(JSRuntime *rt, char *buf, int buf_size,
                                    JSAtom atom)
 {
     if (__JS_AtomIsTaggedInt(atom)) {
-        snprintf(buf, buf_size, "%u", __JS_AtomToUInt32(atom));
+        snprintf(buf, buf_size, "%"PRIu32, __JS_AtomToUInt32(atom));
     } else {
         JSAtomStruct *p;
         assert(atom < rt->atom_size);
@@ -3115,7 +3115,7 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
     char buf[ATOM_GET_STR_BUF_SIZE];
 
     if (__JS_AtomIsTaggedInt(atom)) {
-        snprintf(buf, sizeof(buf), "%u", __JS_AtomToUInt32(atom));
+        snprintf(buf, sizeof(buf), "%"PRIu32, __JS_AtomToUInt32(atom));
         return JS_NewString(ctx, buf);
     } else {
         JSRuntime *rt = ctx->rt;
@@ -3385,7 +3385,7 @@ static JSAtom js_atom_concat_str(JSContext *ctx, JSAtom name, const char *str1)
 static JSAtom js_atom_concat_num(JSContext *ctx, JSAtom name, uint32_t n)
 {
     char buf[16];
-    snprintf(buf, sizeof(buf), "%u", n);
+    snprintf(buf, sizeof(buf), "%"PRIu32, n);
     return js_atom_concat_str(ctx, name, buf);
 }
 
@@ -5568,7 +5568,7 @@ void __JS_FreeValueRT(JSRuntime *rt, JSValue v)
         }
         break;
     default:
-        printf("__JS_FreeValue: unknown tag=%d\n", tag);
+        printf("__JS_FreeValue: unknown tag=%"PRIu32"\n", tag);
         abort();
     }
 }
@@ -6427,7 +6427,8 @@ static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
                          uint32_t pc_value)
 {
     const uint8_t *p_end, *p;
-    int new_line_num, line_num, pc, v, ret;
+    int new_line_num, line_num, pc, ret;
+    int32_t v;
     unsigned int op;
 
     if (!b->has_debug || !b->debug.pc2line_buf) {
@@ -11707,7 +11708,7 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
             break;
         default:
             if (c < 32 || (c >= 0xd800 && c < 0xe000)) {
-                snprintf(buf, sizeof(buf), "\\u%04x", c);
+                snprintf(buf, sizeof(buf), "\\u%04"PRIx32, c);
                 if (string_buffer_puts8(b, buf))
                     goto fail;
             } else {
@@ -34708,7 +34709,7 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
 #endif
     default:
     invalid_tag:
-        JS_ThrowInternalError(s->ctx, "unsupported tag (%d)", tag);
+        JS_ThrowInternalError(s->ctx, "unsupported tag (%"PRIu32")", tag);
         goto fail;
     }
     return 0;
@@ -35870,7 +35871,7 @@ static JSValue JS_ReadObjectRec(BCReaderState *s)
                 return JS_EXCEPTION;
             bc_read_trace(s, "%u\n", val);
             if (val >= s->objects_count) {
-                return JS_ThrowSyntaxError(ctx, "invalid object reference (%u >= %u)",
+                return JS_ThrowSyntaxError(ctx, "invalid object reference (%"PRIu32" >= %d)",
                                            val, s->objects_count);
             }
             obj = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, s->objects[val]));
@@ -39995,7 +39996,7 @@ static JSValue js_parseInt(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
     const char *str, *p;
-    int radix, flags;
+    int32_t radix, flags;
     JSValue ret;
 
     str = JS_ToCString(ctx, argv[0]);
@@ -41880,7 +41881,7 @@ static double js_math_fround(double a)
 static JSValue js_math_imul(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    int a, b;
+    int32_t a, b;
 
     if (JS_ToInt32(ctx, &a, argv[0]))
         return JS_EXCEPTION;
@@ -46808,7 +46809,7 @@ static __exception int remainingElementsCount_add(JSContext *ctx,
                                                   int addend)
 {
     JSValue val;
-    int remainingElementsCount;
+    int32_t remainingElementsCount;
 
     val = JS_GetPropertyUint32(ctx, resolve_element_env, 0);
     if (JS_IsException(val))
@@ -46839,7 +46840,7 @@ static JSValue js_promise_all_resolve_element(JSContext *ctx,
     JSValueConst resolve = func_data[3];
     JSValueConst resolve_element_env = func_data[4];
     JSValue ret, obj;
-    int is_zero, index;
+    int32_t is_zero, index;
 
     if (JS_ToInt32(ctx, &index, func_data[1]))
         return JS_EXCEPTION;
@@ -53937,7 +53938,7 @@ static JSValue js_atomics_notify(JSContext *ctx,
                                  int argc, JSValueConst *argv)
 {
     struct list_head *el, *el1, waiter_list;
-    int32_t count, n;
+    int count, n;
     void *ptr;
     JSAtomicsWaiter *waiter;
     JSArrayBuffer *abuf;
