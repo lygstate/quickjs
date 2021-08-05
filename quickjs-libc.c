@@ -362,7 +362,7 @@ uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)
     if (ctx) {
         buf = js_malloc(ctx, buf_len + 1);
     } else {
-        buf = malloc(buf_len + 1);
+        buf = pal_malloc(buf_len + 1);
     }
     if (!buf) {
         goto done;
@@ -650,7 +650,7 @@ static void setenv(const char *name, const char *value, int overwrite)
     size_t name_len, value_len;
     name_len = strlen(name);
     value_len = strlen(value);
-    str = malloc(name_len + 1 + value_len + 1);
+    str = pal_malloc(name_len + 1 + value_len + 1);
     memcpy(str, name, name_len);
     str[name_len] = '=';
     memcpy(str + name_len + 1, value, value_len);
@@ -2663,7 +2663,7 @@ static int atomic_add_int(int *ptr, int v)
 static void *js_sab_alloc(void *opaque, size_t size)
 {
     JSSABHeader *sab;
-    sab = malloc(sizeof(JSSABHeader) + size);
+    sab = pal_malloc(sizeof(JSSABHeader) + size);
     if (!sab)
         return NULL;
     sab->ref_count = 1;
@@ -2697,7 +2697,7 @@ static JSWorkerMessagePipe *js_new_message_pipe(void)
     if (pal_pipe(pipe_fds, 4096) < 0)
         return NULL;
 
-    ps = malloc(sizeof(*ps));
+    ps = pal_malloc(sizeof(*ps));
     if (!ps) {
         pal_close(pipe_fds[0]);
         pal_close(pipe_fds[1]);
@@ -2888,7 +2888,7 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
     if (!filename)
         goto fail;
 
-    args = malloc(sizeof(*args));
+    args = pal_malloc(sizeof(*args));
     if (!args)
         goto oom_fail;
     memset(args, 0, sizeof(*args));
@@ -2951,20 +2951,20 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
     if (!data)
         return JS_EXCEPTION;
 
-    msg = malloc(sizeof(*msg));
+    msg = pal_malloc(sizeof(*msg));
     if (!msg)
         goto fail;
     msg->data = NULL;
     msg->sab_tab = NULL;
 
     /* must reallocate because the allocator may be different */
-    msg->data = malloc(data_len);
+    msg->data = pal_malloc(data_len);
     if (!msg->data)
         goto fail;
     memcpy(msg->data, data, data_len);
     msg->data_len = data_len;
 
-    msg->sab_tab = malloc(sizeof(msg->sab_tab[0]) * sab_tab_len);
+    msg->sab_tab = pal_malloc(sizeof(msg->sab_tab[0]) * sab_tab_len);
     if (!msg->sab_tab)
         goto fail;
     memcpy(msg->sab_tab, sab_tab, sizeof(msg->sab_tab[0]) * sab_tab_len);
@@ -3266,7 +3266,7 @@ void js_std_init_handlers(JSRuntime *rt)
 {
     JSThreadState *ts;
 
-    ts = malloc(sizeof(*ts));
+    ts = pal_malloc(sizeof(*ts));
     if (!ts) {
         pal_writes(pal_file_get(PAL_FILE_STDERR), "Could not allocate memory for the worker");
         pal_exit(1);
