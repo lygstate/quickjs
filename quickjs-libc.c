@@ -648,7 +648,7 @@ static JSValue js_std_exit(JSContext *ctx, JSValueConst this_val,
     int32_t status;
     if (JS_ToInt32(ctx, &status, argv[0]))
         status = -1;
-    exit(status);
+    pal_exit(status);
     return JS_UNDEFINED;
 }
 
@@ -3323,7 +3323,7 @@ static void *worker_func(void *opaque)
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fprintf(stderr, "JS_NewRuntime failure");
-        exit(1);
+        pal_exit(1);
     }
     js_std_init_handlers(rt);
 
@@ -3816,7 +3816,7 @@ void js_std_init_handlers(JSRuntime *rt)
     ts = malloc(sizeof(*ts));
     if (!ts) {
         fprintf(stderr, "Could not allocate memory for the worker");
-        exit(1);
+        pal_exit(1);
     }
     memset(ts, 0, sizeof(*ts));
     init_list_head(&ts->os_rw_handlers);
@@ -3978,7 +3978,7 @@ void js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
         if (JS_IsException(val)) {
         exception:
             js_std_dump_error(ctx);
-            exit(1);
+            pal_exit(1);
         }
         JS_FreeValue(ctx, val);
     }
