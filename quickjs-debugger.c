@@ -1,5 +1,6 @@
 #include "quickjs-debugger.h"
 #include <assert.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -177,7 +178,7 @@ static void js_debugger_get_value(JSContext *ctx, JSValue var_val, JSValue var, 
         JS_ToUint32(ctx, &len, length);
         JS_FreeValue(ctx, length);
         char lenBuf[64];
-        sprintf(lenBuf, "Array (%d)", len);
+        sprintf(lenBuf, "Array (%" PRIu32 ")", len);
         JS_SetPropertyStr(ctx, var, value_property, JS_NewString(ctx, lenBuf));
         JS_SetPropertyStr(ctx, var, "indexedVariables", JS_NewInt32(ctx, len));
     } else {
@@ -199,7 +200,7 @@ static JSValue js_debugger_get_variable(JSContext *ctx,
 static int js_debugger_get_frame(JSContext *ctx, JSValue args)
 {
     JSValue reference_property = JS_GetPropertyStr(ctx, args, "frameId");
-    int frame;
+    int32_t frame;
     JS_ToInt32(ctx, &frame, reference_property);
     JS_FreeValue(ctx, reference_property);
 
@@ -214,7 +215,7 @@ static void js_send_stopped_event(JSDebuggerInfo *info, const char *reason)
     // better thread id?
     JS_SetPropertyStr(ctx, event, "type", JS_NewString(ctx, "StoppedEvent"));
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
-    int64_t id = (int64_t)info->ctx;
+    int64_t id = (intptr_t)info->ctx;
     JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, id));
     js_transport_send_event(info, event);
 }
@@ -351,7 +352,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             char name_buf[64];
             for (uint32_t i = 0; i < count; i++) {
                 JSValue value = JS_GetPropertyUint32(ctx, variable, start + i);
-                sprintf(name_buf, "%d", i);
+                sprintf(name_buf, "%"PRIu32, i);
                 JSValue variable_json = js_debugger_get_variable(ctx, state, JS_NewString(ctx, name_buf), value);
                 JS_FreeValue(ctx, value);
                 JS_SetPropertyUint32(ctx, properties, i, variable_json);
@@ -516,7 +517,7 @@ static void js_debugger_context_event(JSContext *caller_ctx, const char *reason)
     // better thread id?
     JS_SetPropertyStr(ctx, event, "type", JS_NewString(ctx, "ThreadEvent"));
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
-    JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, (int64_t)caller_ctx));
+    JS_SetPropertyStr(ctx, event, "thread", JS_NewInt64(ctx, (intptr_t)caller_ctx));
     js_transport_send_event(info, event);
 }
 
