@@ -62,10 +62,10 @@
 
 #else
 
-#define FMT_LIMB1 "%x"
-#define FMT_LIMB "%08x"
-#define PRId_LIMB "d"
-#define PRIu_LIMB "u"
+#define FMT_LIMB1 "%x" PRIx32
+#define FMT_LIMB "%08" PRIx32
+#define PRId_LIMB PRIi32
+#define PRIu_LIMB PRIu32
 
 #endif
 
@@ -2530,7 +2530,7 @@ fail:
 
 /* The rounding mode is always BF_RNDZ. Return BF_ST_INVALID_OP if there
    is an overflow and 0 otherwise. */
-int bf_get_int32(int *pres, const bf_t *a, int flags)
+int bf_get_int32(int32_t *pres, const bf_t *a, int flags)
 {
     uint32_t v;
     int ret;
