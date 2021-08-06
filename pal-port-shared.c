@@ -1,8 +1,22 @@
+#include <fcntl.h>
+#include <assert.h>
 
 #include "cwalk.h"
 #include "pal-port.h"
 
-#include <fcntl.h>
+#define PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd) \
+    (((unsigned)fd) < (unsigned)pal_ev.max_fd)
+#define PAL_EV_TOO_MANY_LOOPS (pal_ev.num_loops != 0) /* use after ++ */
+#define PAL_EV_FD_BELONGS_TO_LOOP(loop, fd) \
+    ((loop)->loop_id == pal_ev.fds[fd].loop_id)
+
+#define PAL_EV_TIMEOUT_VEC_OF(loop, idx) \
+    ((loop)->timeout.vec + (idx)*pal_ev.timeout_vec_size)
+#define PAL_EV_TIMEOUT_VEC_OF_VEC_OF(loop, idx) \
+    ((loop)->timeout.vec_of_vec + (idx)*pal_ev.timeout_vec_of_vec_size)
+#define PAL_EV_RND_UP(v, d) (((v) + (d)-1) / (d) * (d))
+
+pal_ev_globals_t pal_ev;
 
 void *pal_mallocz(size_t sz)
 {
@@ -355,4 +369,236 @@ int pal_fputc(int c, pal_file_t fd)
         return EOF;
     }
     return c;
+}
+
+void *pal_ev_memalign(size_t sz, void **orig_addr, int clear)
+{
+    sz = sz + PAL_EV_PAGE_SIZE + PAL_EV_CACHE_LINE_SIZE;
+    if ((*orig_addr = malloc(sz)) == NULL) {
+        return NULL;
+    }
+    if (clear != 0) {
+        memset(*orig_addr, 0, sz);
+    }
+    return (void *)PAL_EV_RND_UP((unsigned long)*orig_addr + (rand() % PAL_EV_PAGE_SIZE),
+                                 PAL_EV_CACHE_LINE_SIZE);
+}
+
+int pal_ev_init(int max_fd)
+{
+    assert(!PAL_EV_IS_INITED(pal_ev));
+    assert(max_fd > 0);
+    if ((pal_ev.fds = (pal_ev_fd_t *)pal_ev_memalign(sizeof(pal_ev_fd_t) * max_fd,
+                                                     &pal_ev._fds_free_addr, 1)) == NULL) {
+        return -1;
+    }
+    pal_ev.max_fd = max_fd;
+    pal_ev.num_loops = 0;
+    pal_ev.timeout_vec_size = PAL_EV_RND_UP(pal_ev.max_fd, PAL_EV_SIMD_BITS) / PAL_EV_SHORT_BITS;
+    pal_ev.timeout_vec_of_vec_size = PAL_EV_RND_UP(pal_ev.timeout_vec_size, PAL_EV_SIMD_BITS) / PAL_EV_SHORT_BITS;
+    return 0;
+}
+
+int pal_ev_deinit(void)
+{
+    assert(PAL_EV_IS_INITED(pal_ev));
+    free(pal_ev._fds_free_addr);
+    pal_ev.fds = NULL;
+    pal_ev._fds_free_addr = NULL;
+    pal_ev.max_fd = 0;
+    pal_ev.num_loops = 0;
+    return 0;
+}
+
+void pal_ev_set_timeout(pal_ev_loop_t *loop, int fd, int timeout_in_usecs)
+{
+    pal_ev_fd_t *target;
+    short *vec, *vec_of_vec;
+    size_t vi = fd / PAL_EV_SHORT_BITS;
+    int64_t delta;
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    assert(PAL_EV_FD_BELONGS_TO_LOOP(loop, fd));
+    target = pal_ev.fds + fd;
+    /* clear timeout */
+    if (target->timeout_idx != PAL_EV_TIMEOUT_IDX_UNUSED) {
+        vec = PAL_EV_TIMEOUT_VEC_OF(loop, target->timeout_idx);
+        if ((vec[vi] &= ~((unsigned short)SHRT_MIN >> (fd % PAL_EV_SHORT_BITS))) == 0) {
+            vec_of_vec = PAL_EV_TIMEOUT_VEC_OF_VEC_OF(loop, target->timeout_idx);
+            vec_of_vec[vi / PAL_EV_SHORT_BITS] &= ~((unsigned short)SHRT_MIN >> (vi % PAL_EV_SHORT_BITS));
+        }
+        target->timeout_idx = PAL_EV_TIMEOUT_IDX_UNUSED;
+    }
+    if (secs != 0) {
+        delta = (loop->now - loop->timeout.base_time) / loop->timeout.resolution;
+        if (delta >= PAL_EV_TIMEOUT_VEC_SIZE) {
+            delta = PAL_EV_TIMEOUT_VEC_SIZE - 1;
+        }
+        target->timeout_idx =
+            (loop->timeout.base_idx + delta) % PAL_EV_TIMEOUT_VEC_SIZE;
+        vec = PAL_EV_TIMEOUT_VEC_OF(loop, target->timeout_idx);
+        vec[vi] |= (unsigned short)SHRT_MIN >> (fd % PAL_EV_SHORT_BITS);
+        vec_of_vec = PAL_EV_TIMEOUT_VEC_OF_VEC_OF(loop, target->timeout_idx);
+        vec_of_vec[vi / PAL_EV_SHORT_BITS] |= (unsigned short)SHRT_MIN >> (vi % PAL_EV_SHORT_BITS);
+    }
+}
+
+int pal_ev_add(pal_ev_loop_t *loop, int fd, int events, int timeout_in_secs,
+               pal_ev_handler_t *callback, void *cb_arg)
+{
+    pal_ev_fd_t *target;
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    target = pal_ev.fds + fd;
+    assert(target->loop_id == 0);
+    target->callback = callback;
+    target->cb_arg = cb_arg;
+    target->loop_id = loop->loop_id;
+    target->events = 0;
+    target->timeout_idx = PAL_EV_TIMEOUT_IDX_UNUSED;
+    if (pal_ev_update_events_internal(loop, fd, events | PAL_EV_ADD) != 0) {
+        target->loop_id = 0;
+        return -1;
+    }
+    pal_ev_set_timeout(loop, fd, timeout_in_usecs);
+    return 0;
+}
+
+int pal_ev_del(pal_ev_loop_t *loop, int fd)
+{
+    pal_ev_fd_t *target;
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    target = pal_ev.fds + fd;
+    if (pal_ev_update_events_internal(loop, fd, PAL_EV_DEL) != 0) {
+        return -1;
+    }
+    pal_ev_set_timeout(loop, fd, 0);
+    target->loop_id = 0;
+    return 0;
+}
+
+int pal_ev_is_active(pal_ev_loop_t *loop, int fd)
+{
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    return loop != NULL
+               ? pal_ev.fds[fd].loop_id == loop->loop_id
+               : pal_ev.fds[fd].loop_id != 0;
+}
+
+int pal_ev_get_events(pal_ev_loop_t *loop pal_maybe_unused, int fd)
+{
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    return pal_ev.fds[fd].events & PAL_EV_READWRITE;
+}
+
+int pal_ev_set_events(pal_ev_loop_t *loop, int fd, int events)
+{
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    if (pal_ev.fds[fd].events != events && pal_ev_update_events_internal(loop, fd, events) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+pal_ev_handler_t *pal_ev_get_callback(pal_ev_loop_t *loop pal_maybe_unused,
+                                      int fd, void **cb_arg)
+{
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    if (cb_arg != NULL) {
+        *cb_arg = pal_ev.fds[fd].cb_arg;
+    }
+    return pal_ev.fds[fd].callback;
+}
+
+void pal_ev_set_callback(pal_ev_loop_t *loop pal_maybe_unused, int fd,
+                         pal_ev_handler_t *callback, void **cb_arg)
+{
+    assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(fd));
+    if (cb_arg != NULL) {
+        pal_ev.fds[fd].cb_arg = *cb_arg;
+    }
+    pal_ev.fds[fd].callback = callback;
+}
+
+int pal_ev_next_fd(pal_ev_loop_t *loop, int curfd)
+{
+    if (curfd != -1) {
+        assert(PAL_EV_IS_INITED_AND_FD_IN_RANGE(curfd));
+    }
+    while (++curfd < pal_ev.max_fd) {
+        if (loop->loop_id == pal_ev.fds[curfd].loop_id) {
+            return curfd;
+        }
+    }
+    return -1;
+}
+
+int pal_ev_init_loop_internal(pal_ev_loop_t *loop, int max_timeout)
+{
+    loop->loop_id = ++pal_ev.num_loops;
+    assert(PAL_EV_TOO_MANY_LOOPS);
+    if ((loop->timeout.vec_of_vec = (short *)pal_ev_memalign((pal_ev.timeout_vec_of_vec_size + pal_ev.timeout_vec_size) * sizeof(short) * PAL_EV_TIMEOUT_VEC_SIZE,
+                                                             &loop->timeout._free_addr, 1)) == NULL) {
+        --pal_ev.num_loops;
+        return -1;
+    }
+    loop->timeout.vec = loop->timeout.vec_of_vec + pal_ev.timeout_vec_of_vec_size * PAL_EV_TIMEOUT_VEC_SIZE;
+    loop->timeout.base_idx = 0;
+    pal_clock_gettime(PAL_CLOCK_MONOTONIC, &loop->timeout.base_time);
+    loop->timeout.resolution = PAL_EV_RND_UP(max_timeout, PAL_EV_TIMEOUT_VEC_SIZE) / PAL_EV_TIMEOUT_VEC_SIZE;
+    pal_clock_gettime(PAL_CLOCK_MONOTONIC, &loop->now);
+    return 0;
+}
+
+void pal_ev_deinit_loop_internal(pal_ev_loop_t *loop)
+{
+    free(loop->timeout._free_addr);
+}
+
+void pal_ev_handle_timeout_internal(pal_ev_loop_t *loop)
+{
+    size_t i, j, k;
+    for (;
+         loop->timeout.base_time <= loop->now - loop->timeout.resolution;
+         loop->timeout.base_idx = (loop->timeout.base_idx + 1) % PAL_EV_TIMEOUT_VEC_SIZE,
+         loop->timeout.base_time += loop->timeout.resolution) {
+        /* TODO use SIMD instructions */
+        short *vec = PAL_EV_TIMEOUT_VEC_OF(loop, loop->timeout.base_idx);
+        short *vec_of_vec = PAL_EV_TIMEOUT_VEC_OF_VEC_OF(loop, loop->timeout.base_idx);
+        for (i = 0; i < pal_ev.timeout_vec_of_vec_size; ++i) {
+            short vv = vec_of_vec[i];
+            if (vv != 0) {
+                for (j = i * PAL_EV_SHORT_BITS; vv != 0; j++, vv <<= 1) {
+                    if (vv < 0) {
+                        short v = vec[j];
+                        assert(v != 0);
+                        for (k = j * PAL_EV_SHORT_BITS; v != 0; k++, v <<= 1) {
+                            if (v < 0) {
+                                pal_ev_fd_t *fd = pal_ev.fds + k;
+                                assert(fd->loop_id == loop->loop_id);
+                                fd->timeout_idx = PAL_EV_TIMEOUT_IDX_UNUSED;
+                                (*fd->callback)(loop, k, PAL_EV_TIMEOUT, fd->cb_arg);
+                            }
+                        }
+                        vec[j] = 0;
+                    }
+                }
+                vec_of_vec[i] = 0;
+            }
+        }
+    }
+}
+
+int pal_ev_loop_once(pal_ev_loop_t *loop, int max_wait)
+{
+    loop->now = time(NULL);
+    if (max_wait > loop->timeout.resolution) {
+        max_wait = loop->timeout.resolution;
+    }
+    if (pal_ev_poll_once_internal(loop, max_wait) != 0) {
+        return -1;
+    }
+    if (max_wait != 0) {
+        loop->now = time(NULL);
+    }
+    pal_ev_handle_timeout_internal(loop);
+    return 0;
 }

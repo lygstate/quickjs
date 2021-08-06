@@ -29,6 +29,16 @@ struct pal_session_t {
 
 static pal_session_t global_pal;
 
+#if defined(_WIN32)
+#include "pal-port-ev-win-inc.c"
+#elif defined(__linux__)
+#include "pal-port-ev-epoll-inc.c"
+#elif defined(__FreeBSD__) || defined(__APPLE__)
+#include "pal-port-ev-kqueue-inc.c"
+#else
+#include "pal-port-ev-select-inc.c"
+#endif
+
 #ifdef _WIN32
 pal_process_info_t *pal_process_info_create_wchar(int argc, wchar_t **argv, wchar_t **envp)
 {

@@ -247,6 +247,25 @@
 /* Do not delete object when closed.  */
 #define PAL_RTLD_NODELETE 0x01000
 
+/**
+ * @section These predefined macros used for pal event loop library
+ */
+#define PAL_EV_IS_INITED(pal_ev) (pal_ev.max_fd != 0)
+#define PAL_EV_PAGE_SIZE 4096
+#define PAL_EV_CACHE_LINE_SIZE 32 /* in bytes, ok if greater than the actual */
+#define PAL_EV_SIMD_BITS 128
+#define PAL_EV_TIMEOUT_VEC_SIZE 128
+#define PAL_EV_SHORT_BITS (sizeof(short) * 8)
+
+#define PAL_EV_READ 1
+#define PAL_EV_WRITE 2
+#define PAL_EV_TIMEOUT 4
+#define PAL_EV_ADD 0x40000000
+#define PAL_EV_DEL 0x20000000
+#define PAL_EV_READWRITE (PAL_EV_READ | PAL_EV_WRITE)
+
+#define PAL_EV_TIMEOUT_IDX_UNUSED (UCHAR_MAX)
+
 enum pal_clockid_t {
     PAL_CLOCK_REALTIME = 0,
     PAL_CLOCK_MONOTONIC = 1,
@@ -383,6 +402,54 @@ typedef void *(*pal_thread_method)(void *);
 typedef void *pal_thread;
 typedef void *pal_mutex;
 typedef void *pal_condition;
+
+/**
+ * @section The pal event loop library is a fork of
+ *  https://github.com/kazuho/picoev,
+ *  renamed the prefix from pal_ev to pal_ev, the new api are
+ *  not compatible with picoev.
+ */
+typedef unsigned short pal_ev_loop_id_t;
+
+typedef struct pal_ev_loop_t pal_ev_loop_t;
+
+typedef void pal_ev_handler_t(pal_ev_loop_t *loop, int fd, int revents,
+                              void *cb_arg);
+
+typedef struct pal_ev_fd_t {
+    /* use accessors! */
+    /* TODO adjust the size to match that of a cache line */
+    pal_ev_handler_t *callback;
+    void *cb_arg;
+    pal_ev_loop_id_t loop_id;
+    char events;
+    unsigned char timeout_idx; /* PAL_EV_TIMEOUT_IDX_UNUSED if not used */
+    int _backend;              /* can be used by backends (never modified by core) */
+} pal_ev_fd_t;
+
+struct pal_ev_loop_t {
+    /* read only */
+    pal_ev_loop_id_t loop_id;
+    struct {
+        short *vec;
+        short *vec_of_vec;
+        size_t base_idx;
+        struct timespec base_time;
+        int resolution;
+        void *_free_addr;
+    } timeout;
+    struct timespec now;
+};
+
+typedef struct pal_ev_globals_t {
+    /* read only */
+    pal_ev_fd_t *fds;
+    void *_fds_free_addr;
+    int max_fd;
+    int num_loops;
+    size_t timeout_vec_size;        /* # of elements in pal_ev_loop_t.timeout.vec[0] */
+    size_t timeout_vec_of_vec_size; /* ... in timeout.vec_of_vec[0] */
+} pal_ev_globals_t;
 
 #ifndef pal_get_stack_pointer_defined
 /* Note: OS and CPU dependent */
@@ -599,5 +666,68 @@ int pal_dlclose(void *handle);
 int pal_tty_isatty(pal_file_t fd);
 int pal_tty_getwinsize(pal_file_t fd, int *width, int *height);
 int pal_tty_setraw(pal_file_t fd);
+
+/* creates a new event loop (defined by each backend) */
+pal_ev_loop_t *pal_ev_create_loop(int max_timeout);
+
+/* destroys a loop (defined by each backend) */
+int pal_ev_destroy_loop(pal_ev_loop_t *loop);
+
+/* internal: updates events to be watched (defined by each backend) */
+int pal_ev_update_events_internal(pal_ev_loop_t *loop, int fd, int events);
+
+/* internal: poll once and call the handlers (defined by each backend) */
+int pal_ev_poll_once_internal(pal_ev_loop_t *loop, int max_wait);
+
+/* internal, aligned allocator with address scrambling to avoid cache
+     line contention */
+void *pal_ev_memalign(size_t sz, void **orig_addr, int clear);
+
+/* initializes pal_ev */
+int pal_ev_init(int max_fd);
+
+/* deinitializes pal_ev */
+int pal_ev_deinit(void);
+
+/* updates timeout */
+void pal_ev_set_timeout(pal_ev_loop_t *loop, int fd, int64 usecs);
+
+/* registers a file descriptor and callback argument to a event loop */
+int pal_ev_add(pal_ev_loop_t *loop, int fd, int events, int timeout_in_secs,
+               pal_ev_handler_t *callback, void *cb_arg);
+
+/* unregisters a file descriptor from event loop */
+int pal_ev_del(pal_ev_loop_t *loop, int fd);
+
+/* check if fd is registered (checks all loops if loop == NULL) */
+int pal_ev_is_active(pal_ev_loop_t *loop, int fd);
+
+/* returns events being watched for given descriptor */
+int pal_ev_get_events(pal_ev_loop_t *loop, int fd);
+
+/* sets events to be watched for given desriptor */
+int pal_ev_set_events(pal_ev_loop_t *loop, int fd, int events);
+
+/* returns callback for given descriptor */
+pal_ev_handler_t *pal_ev_get_callback(pal_ev_loop_t *loop,
+                                      int fd, void **cb_arg);
+/* sets callback for given descriptor */
+void pal_ev_set_callback(pal_ev_loop_t *loop, int fd,
+                         pal_ev_handler_t *callback, void **cb_arg);
+
+/* function to iterate registered information. To start iteration, set curfd
+     to -1 and call the function until -1 is returned */
+int pal_ev_next_fd(pal_ev_loop_t *loop, int curfd);
+
+/* internal function */
+int pal_ev_init_loop_internal(pal_ev_loop_t *loop, int max_timeout);
+/* internal function */
+void pal_ev_deinit_loop_internal(pal_ev_loop_t *loop);
+
+/* internal function */
+void pal_ev_handle_timeout_internal(pal_ev_loop_t *loop);
+
+/* loop once */
+int pal_ev_loop_once(pal_ev_loop_t *loop, int max_wait);
 
 #endif /* _PAL_PORT_H_ */
