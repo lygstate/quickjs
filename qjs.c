@@ -268,6 +268,17 @@ void help(void)
     pal_exit(1);
 }
 
+void test_time() {
+  struct timespec ts;
+  int64_t local_time;
+  int timezone_offset;
+  pal_clock_gettime(PAL_CLOCK_REALTIME, &ts);
+  timezone_offset = pal_gettimezoneoffset(ts.tv_sec, true);
+  local_time = ts.tv_sec + timezone_offset;
+  printf("utc time:%lld, local time:%lld timezone_offset:%d\n",
+    (long long)ts.tv_sec, (long long)local_time, timezone_offset);
+}
+
 #if defined(_WIN32)
 int wmain(int argc, wchar_t **_argv, wchar_t **_envp)
 #else
@@ -296,6 +307,7 @@ int main(int argc, char **_argv, char **_envp)
     size_t stack_size = 0;
 
     pal_initialize(argc, (void**)_argv, (void**)_envp, true);
+    test_time();
     argv = pal_process_info_get()->argv;
     JS_Initialize();
 #ifdef CONFIG_BIGNUM
