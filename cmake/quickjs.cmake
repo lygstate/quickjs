@@ -99,4 +99,4 @@ add_executable(regexp_test
   ${QUICKJS_SOURCE_DIR}/libunicode.c
   ${QUICKJS_SOURCE_DIR}/cutils.c
 )
-target_compile_definitions(regexp_test PRIVATE -DTEST)
+target_compile_definitions(regexp_test PRIVATE -DTEST -Dabort=abort)

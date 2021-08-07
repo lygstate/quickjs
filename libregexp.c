@@ -31,7 +31,9 @@
 #include "cutils.h"
 #include "libregexp.h"
 
+#ifndef abort
 #define abort pal_abort
+#endif
 
 /*
   TODO:
