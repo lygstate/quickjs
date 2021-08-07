@@ -5528,9 +5528,12 @@ void __JS_FreeValueRT(JSRuntime *rt, JSValue v)
             JS_FreeAtomStruct(rt, p);
         }
         break;
-    default:
-        printf("__JS_FreeValue: unknown tag=%"PRIu32"\n", tag);
+    default: {
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "__JS_FreeValue: unknown tag=%"PRIu32"\n", tag);
+        pal_writes(pal_file_get(PAL_FILE_STDOUT), buffer);
         abort();
+    }
     }
 }
 
