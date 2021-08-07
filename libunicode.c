@@ -31,6 +31,8 @@
 #include "libunicode.h"
 #include "libunicode-table.h"
 
+#define abort pal_abort
+
 enum {
     RUN_TYPE_U,
     RUN_TYPE_L,
