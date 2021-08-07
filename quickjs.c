@@ -47832,8 +47832,13 @@ static __exception int JS_ThisTimeValue(JSContext *ctx, double *valp, JSValueCon
         JSObject *p = JS_VALUE_GET_OBJ(this_val);
         if (p->class_id == JS_CLASS_DATE && JS_IsNumber(p->u.object_data))
             return JS_ToFloat64(ctx, valp, p->u.object_data);
+        else {
+            long long *x = (long long *)&(p->u.object_data);
+            JS_ThrowTypeError(ctx, "JS_ThisTimeValue object_data not number:0x%llx", *x);
+            return -1;
+        }
     }
-    JS_ThrowTypeError(ctx, "not a Date object");
+    JS_ThrowTypeError(ctx, "JS_ThisTimeValue not a Date object");
     return -1;
 }
 
