@@ -635,35 +635,13 @@ static JSValue js_std_getenv(JSContext *ctx, JSValueConst this_val,
     name = JS_ToCString(ctx, argv[0]);
     if (!name)
         return JS_EXCEPTION;
-    str = getenv(name);
+    str = pal_getenv(name);
     JS_FreeCString(ctx, name);
     if (!str)
         return JS_UNDEFINED;
     else
         return JS_NewString(ctx, str);
 }
-
-#if defined(_WIN32)
-static void setenv(const char *name, const char *value, int overwrite)
-{
-    char *str;
-    size_t name_len, value_len;
-    name_len = strlen(name);
-    value_len = strlen(value);
-    str = pal_malloc(name_len + 1 + value_len + 1);
-    memcpy(str, name, name_len);
-    str[name_len] = '=';
-    memcpy(str + name_len + 1, value, value_len);
-    str[name_len + 1 + value_len] = '\0';
-    _putenv(str);
-    free(str);
-}
-
-static void unsetenv(const char *name)
-{
-    setenv(name, "", TRUE);
-}
-#endif /* _WIN32 */
 
 static JSValue js_std_setenv(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
@@ -677,7 +655,7 @@ static JSValue js_std_setenv(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, name);
         return JS_EXCEPTION;
     }
-    setenv(name, value, TRUE);
+    pal_setenv(name, value, TRUE);
     JS_FreeCString(ctx, name);
     JS_FreeCString(ctx, value);
     return JS_UNDEFINED;
@@ -690,7 +668,7 @@ static JSValue js_std_unsetenv(JSContext *ctx, JSValueConst this_val,
     name = JS_ToCString(ctx, argv[0]);
     if (!name)
         return JS_EXCEPTION;
-    unsetenv(name);
+    pal_unsetenv(name);
     JS_FreeCString(ctx, name);
     return JS_UNDEFINED;
 }
