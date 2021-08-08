@@ -40,6 +40,13 @@
 #include "libbf.h"
 #endif
 
+#undef isfinite
+#define isfinite pal_isfinite
+#undef isinf
+#define isinf pal_isinf
+#undef isnan
+#define isnan pal_isnan
+
 #define OPTIMIZE         1
 #define SHORT_OPCODES    1
 #if defined(EMSCRIPTEN) || defined(_MSC_VER)
