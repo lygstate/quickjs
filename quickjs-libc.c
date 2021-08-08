@@ -1585,7 +1585,7 @@ static JSValue js_os_setReadHandler(JSContext *ctx, JSValueConst this_val,
         }
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "a not a function");
         rh = find_rh(ts, fd);
         if (!rh) {
             rh = js_mallocz(ctx, sizeof(*rh));
@@ -1663,7 +1663,7 @@ static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
         signal(sig_num, handler);
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "b not a function");
         sh = find_sh(ts, sig_num);
         if (!sh) {
             sh = js_mallocz(ctx, sizeof(*sh));
@@ -1733,7 +1733,7 @@ static JSValue js_os_setTimeout(JSContext *ctx, JSValueConst this_val,
 
     func = argv[0];
     if (!JS_IsFunction(ctx, func))
-        return JS_ThrowTypeError(ctx, "not a function");
+        return JS_ThrowTypeError(ctx, "c not a function");
     if (JS_ToInt64(ctx, &delay, argv[1]))
         return JS_EXCEPTION;
     obj = JS_NewObjectClass(ctx, js_os_timer_class_id);
@@ -3004,7 +3004,7 @@ static JSValue js_worker_set_onmessage(JSContext *ctx, JSValueConst this_val,
         }
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "d not a function");
         if (!port) {
             port = js_mallocz(ctx, sizeof(*port));
             if (!port)
