@@ -16682,6 +16682,14 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     JS_FreeValue(ctx, call_argv[i]);
                 sp -= call_argc + 2;
                 *sp++ = ret_val;
+                int this_tag = JS_VALUE_GET_TAG(sp[-1]);
+                if (this_tag != JS_TAG_OBJECT) {
+                    uintptr_t sp = pal_get_stack_pointer();
+                    ret_val = JS_ThrowTypeError(ctx,
+                        "constructor create a none object op:%d this_tag:%d sp:0x%x\n",
+                         opcode, this_tag, sp);
+                    goto exception;
+                }
             }
             BREAK;
         CASE(OP_call_method):
@@ -16695,8 +16703,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 sf->cur_pc = pc;
                 if (func_tag == JS_TAG_UNDEFINED) {
                     uintptr_t sp = pal_get_stack_pointer();
-                    ret_val = JS_ThrowTypeError(ctx, "Calling to undefined function opcode:%d call_argc:%d this_tag:%d sp:0x%x\n",
-                         opcode, call_argc, this_tag, sp);
+                    ret_val = JS_ThrowTypeError(ctx,
+                        "Calling to undefined function opcode:%d call_argc:%d func_tag:%d this_tag:%d sp:0x%x\n",
+                         opcode, call_argc, func_tag, this_tag, sp);
                     goto exception;
                 }
                 ret_val = JS_CallInternal(ctx, call_argv[-1], call_argv[-2],
@@ -17580,6 +17589,15 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 if (unlikely(JS_IsException(val)))
                     goto exception;
                 *sp++ = val;
+                int func_tag = JS_VALUE_GET_TAG(sp[-1]);
+                if (func_tag != JS_TAG_OBJECT) {
+                    uintptr_t sp = pal_get_stack_pointer();
+                    ret_val = JS_ThrowTypeError(ctx,
+                        "func_tag not found opcode:%d func_tag:%d sp:0x%x\n",
+                         opcode, func_tag, sp);
+                    goto exception;
+                }
+
             }
             BREAK;
 
@@ -18821,6 +18839,13 @@ static JSValue js_create_from_ctor(JSContext *ctx, JSValueConst ctor,
     }
     obj = JS_NewObjectProtoClass(ctx, proto, class_id);
     JS_FreeValue(ctx, proto);
+    int obj_tag = JS_VALUE_GET_TAG(obj);
+    if (!JS_IsException(obj) && obj_tag != JS_TAG_OBJECT) {
+        uintptr_t sp = pal_get_stack_pointer();
+        obj = JS_ThrowTypeError(ctx,
+            "js_create_from_ctor create a non object obj_tag:%d sp:0x%x\n",
+                obj_tag, sp);
+    }
     return obj;
 }
 
@@ -48220,8 +48245,17 @@ has_val:
     rv = js___date_create(ctx, JS_UNDEFINED, 3, args);
 #else
     rv = js_create_from_ctor(ctx, new_target, JS_CLASS_DATE);
-    if (!JS_IsException(rv))
-        JS_SetObjectData(ctx, rv, JS_NewFloat64(ctx, val));
+    if (!JS_IsException(rv)) {
+        int this_tag = JS_VALUE_GET_TAG(rv);
+        if (this_tag != JS_TAG_OBJECT) {
+            uintptr_t sp = pal_get_stack_pointer();
+            rv = JS_ThrowTypeError(ctx,
+                "js_date_constructor create a non object this_tag:%d sp:0x%x\n",
+                    this_tag, sp);
+        } else {
+            JS_SetObjectData(ctx, rv, JS_NewFloat64(ctx, val));
+        }
+    }
 #endif
     if (!JS_IsException(rv) && JS_IsUndefined(new_target)) {
         /* invoked as a function, return (new Date()).toString(); */
