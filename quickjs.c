@@ -42047,7 +42047,7 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
 /* OS dependent. d = argv[0] is in ms from 1970. Return the difference
    between UTC time and local time 'd' in minutes */
 static force_inline int getTimezoneOffset(int64_t time) {
-    return -pal_gettimezoneoffset(time) / 60;
+    return -pal_gettimezoneoffset(time, true) / 60;
 }
 
 /* RegExp */
