@@ -701,6 +701,10 @@ int JS_ToIndex(JSContext *ctx, uint64_t *plen, JSValueConst val);
 int JS_ToFloat64(JSContext *ctx, double *pres, JSValueConst val);
 /* return an exception if 'val' is a Number */
 int JS_ToBigInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
+static inline int JS_ToBigUint64(JSContext *ctx, uint64_t *pres, JSValueConst val)
+{
+    return JS_ToBigInt64(ctx, (int64_t*)pres, val);
+}
 /* same as JS_ToInt64() but allow BigInt */
 int JS_ToInt64Ext(JSContext *ctx, int64_t *pres, JSValueConst val);
 
