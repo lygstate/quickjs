@@ -51,7 +51,6 @@ else()
   if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
     target_sources(quickjs PRIVATE
       ${QUICKJS_SOURCE_DIR}/pal-port-win.c
-      ${QUICKJS_SOURCE_DIR}/win/msvc_stdatomic.c
       ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-win.c
     )
   else()
