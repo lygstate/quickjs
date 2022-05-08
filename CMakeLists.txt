@@ -48,7 +48,7 @@ add_executable(qjs
   qjs.c
 )
 
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unicode/UnicodeData.txt)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unicode/UnicodeData.txt)
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libunicode-table.h
     COMMAND ${UNICODE_GEN_EXECUTABLE} unicode ${CMAKE_CURRENT_BINARY_DIR}/libunicode-table.h

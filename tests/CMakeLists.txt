@@ -19,7 +19,7 @@ ExternalProject_Add(test262
     BUILD_IN_SOURCE TRUE
 )
 
-if (QUICKJS_ENABLE_SLOW_TEST)
+if(QUICKJS_ENABLE_SLOW_TEST)
     add_test(
         NAME run-test262
         COMMAND $<TARGET_FILE:run-test262> -m -c test262.conf -a
@@ -129,7 +129,7 @@ add_test(
     COMMAND $<TARGET_FILE:qjs> ${CMAKE_CURRENT_BINARY_DIR}/test_bjson.js
     WORKING_DIRECTORY ${QUICKJS_SOURCE_DIR}
 )
-if ("${CONFIG_BIGNUM}" STREQUAL "1")
+if("${CONFIG_BIGNUM}" STREQUAL "1")
     add_test(
         NAME test_bjson_bignum
         COMMAND $<TARGET_FILE:qjs> --bignum ${CMAKE_CURRENT_BINARY_DIR}/test_bjson.js
@@ -164,7 +164,7 @@ set_target_properties(
   PROPERTIES PREFIX ""
 )
 
-if ("${CONFIG_BIGNUM}" STREQUAL "1")
+if("${CONFIG_BIGNUM}" STREQUAL "1")
     add_test(
         NAME test_op_overloading
         COMMAND $<TARGET_FILE:qjs> --bignum tests/test_op_overloading.js
