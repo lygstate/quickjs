@@ -1396,6 +1396,16 @@ static JSValue js_os_open(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, ret);
 }
 
+static JSValue js_os_fsync(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    int32_t fd;
+    if (JS_ToInt32(ctx, &fd, argv[0]))
+        return JS_EXCEPTION;
+    pal_fsync(fd);
+    return JS_UNDEFINED;
+}
+
 static JSValue js_os_close(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -3069,6 +3079,7 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     OS_FLAG(O_CREAT),
     OS_FLAG(O_EXCL),
     OS_FLAG(O_TRUNC),
+    JS_CFUNC_DEF("fsync", 1, js_os_fsync ),
     JS_CFUNC_DEF("close", 1, js_os_close ),
     JS_CFUNC_DEF("seek", 3, js_os_seek ),
     JS_CFUNC_MAGIC_DEF("read", 4, js_os_read_write, 0 ),
