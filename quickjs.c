@@ -22,6 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#define _UCRT_LEGACY_INFINITY
+#define _UCRT_NOISY_NAN
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
