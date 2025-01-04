@@ -372,7 +372,7 @@ uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)
         if (ctx)
             js_free(ctx, buf);
         else
-            free(buf);
+            pal_free(buf);
         buf = NULL;
         goto done;
     }
