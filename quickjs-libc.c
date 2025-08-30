@@ -372,7 +372,7 @@ uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)
         if (ctx)
             js_free(ctx, buf);
         else
-            free(buf);
+            pal_free(buf);
         buf = NULL;
         goto done;
     }
@@ -581,7 +581,7 @@ JSModuleDef *js_module_loader(JSContext *ctx,
                               const char *module_name, void *opaque)
 {
     JSModuleDef *m = NULL;
-    char *module_name_dup = strdup(module_name);
+    char *module_name_dup = pal_strdup(module_name);
     if (has_suffix(module_name_dup, ".module"))
     {
         size_t module_name_len = strlen(module_name_dup);
@@ -590,12 +590,12 @@ JSModuleDef *js_module_loader(JSContext *ctx,
 
     if (has_suffix(module_name_dup, NATIVE_LIBRARY_SUFFIX)) {
         m = js_module_loader_so(ctx, module_name_dup);
-        free(module_name_dup);
+        pal_free(module_name_dup);
     } else {
         size_t buf_len;
         uint8_t *buf;
         JSValue func_val;
-        free(module_name_dup);
+        pal_free(module_name_dup);
         buf = js_load_file(ctx, &buf_len, module_name);
         if (!buf) {
             JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
@@ -2666,7 +2666,7 @@ static void js_sab_free(void *opaque, void *ptr)
     ref_count = atomic_add_int(&sab->ref_count, -1);
     assert(ref_count >= 0);
     if (ref_count == 0) {
-        free(sab);
+        pal_free(sab);
     }
 }
 
@@ -2712,9 +2712,9 @@ static void js_free_message(JSWorkerMessage *msg)
     for(i = 0; i < msg->sab_tab_len; i++) {
         js_sab_free(NULL, msg->sab_tab[i]);
     }
-    free(msg->sab_tab);
-    free(msg->data);
-    free(msg);
+    pal_free(msg->sab_tab);
+    pal_free(msg->data);
+    pal_free(msg);
 }
 
 static void js_free_message_pipe(JSWorkerMessagePipe *ps)
@@ -2736,7 +2736,7 @@ static void js_free_message_pipe(JSWorkerMessagePipe *ps)
         pal_mutex_destroy(&ps->mutex);
         pal_close(ps->read_fd);
         pal_close(ps->write_fd);
-        free(ps);
+        pal_free(ps);
     }
 }
 
@@ -2800,9 +2800,9 @@ static void *worker_func(void *opaque)
 
     if (!JS_RunModule(ctx, args->basename, args->filename))
         js_std_dump_error(ctx);
-    free(args->filename);
-    free(args->basename);
-    free(args);
+    pal_free(args->filename);
+    pal_free(args->basename);
+    pal_free(args);
 
     js_std_loop(ctx);
 
@@ -2880,8 +2880,8 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
     if (!args)
         goto oom_fail;
     memset(args, 0, sizeof(*args));
-    args->filename = strdup(filename);
-    args->basename = strdup(basename);
+    args->filename = pal_strdup(filename);
+    args->basename = pal_strdup(basename);
 
     /* ports */
     args->recv_pipe = js_new_message_pipe();
@@ -2910,11 +2910,11 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
     JS_FreeCString(ctx, basename);
     JS_FreeCString(ctx, filename);
     if (args) {
-        free(args->filename);
-        free(args->basename);
+        pal_free(args->filename);
+        pal_free(args->basename);
         js_free_message_pipe(args->recv_pipe);
         js_free_message_pipe(args->send_pipe);
-        free(args);
+        pal_free(args);
     }
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
@@ -2985,9 +2985,9 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
  fail:
     if (msg) {
-        free(msg->data);
-        free(msg->sab_tab);
-        free(msg);
+        pal_free(msg->data);
+        pal_free(msg->sab_tab);
+        pal_free(msg);
     }
     js_free(ctx, data);
     js_free(ctx, sab_tab);
@@ -3309,7 +3309,7 @@ void js_std_free_handlers(JSRuntime *rt)
     js_free_message_pipe(ts->send_pipe);
 #endif
 
-    free(ts);
+    pal_free(ts);
     JS_SetRuntimeOpaque(rt, NULL); /* fail safe */
 }
 
