@@ -10638,7 +10638,7 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
 static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
 {
     uint32_t tag;
-    int ret;
+    int32_t ret;
 
  redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
@@ -10930,7 +10930,7 @@ static inline int JS_ToUint32Free(JSContext *ctx, uint32_t *pres, JSValue val)
 static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
 {
     uint32_t tag;
-    int res;
+    int32_t res;
 
  redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
@@ -13203,7 +13203,7 @@ static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
 static int js_bfdec_pow(bfdec_t *r, const bfdec_t *a, const bfdec_t *b)
 {
     bfdec_t b1;
-    int32_t b2;
+    int b2;
     int ret;
 
     bfdec_init(b->ctx, &b1);
@@ -49774,7 +49774,7 @@ static JSValue js_bigfloat_parseFloat(JSContext *ctx, JSValueConst this_val,
     bf_t *a;
     const char *str;
     JSValue ret;
-    int radix;
+    int32_t radix;
     JSFloatEnv *fe;
 
     str = JS_ToCString(ctx, argv[0]);
