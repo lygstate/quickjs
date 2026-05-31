@@ -48,6 +48,14 @@
 #include "libregexp.h"
 #include "dtoa.h"
 
+#ifdef CONFIG_PAL
+#include "pal-port.h"
+#ifndef abort
+#define abort pal_abort
+#endif
+#include "quickjs-debugger.h"
+#endif
+
 #if defined(EMSCRIPTEN) || defined(_MSC_VER)
 #define DIRECT_DISPATCH  0
 #else
@@ -1933,6 +1941,9 @@ static int init_class_range(JSRuntime *rt, JSClassShortDef const *tab,
 /* Uses code from LLVM project. */
 static inline uintptr_t js_get_stack_pointer(void)
 {
+#ifdef CONFIG_PAL
+    return pal_get_stack_pointer();
+#else
 #if defined(__clang__) || defined(__GNUC__)
     return (uintptr_t)__builtin_frame_address(0);
 #elif defined(_MSC_VER)
@@ -1946,6 +1957,7 @@ static inline uintptr_t js_get_stack_pointer(void)
     // Tested on: MSVC 2015 - 2019, GCC 4.9 - 9, Clang 3.2 - 9, ICC 13 - 19.
     char *volatile Ptr = &CharOnStack;
     return (uintptr_t) Ptr;
+#endif
 #endif
 }
 
@@ -2051,22 +2063,38 @@ int JS_AddRuntimeFinalizer(JSRuntime *rt, JSRuntimeFinalizer *finalizer,
 
 static void *js_def_calloc(void *opaque, size_t count, size_t size)
 {
+#ifdef CONFIG_PAL
+    return pal_mallocz(count * size);
+#else
     return calloc(count, size);
+#endif
 }
 
 static void *js_def_malloc(void *opaque, size_t size)
 {
+#ifdef CONFIG_PAL
+    return pal_malloc(size);
+#else
     return malloc(size);
+#endif
 }
 
 static void js_def_free(void *opaque, void *ptr)
 {
+#ifdef CONFIG_PAL
+    pal_free(ptr);
+#else
     free(ptr);
+#endif
 }
 
 static void *js_def_realloc(void *opaque, void *ptr, size_t size)
 {
+#ifdef CONFIG_PAL
+    return pal_realloc(ptr, size);
+#else
     return realloc(ptr, size);
+#endif
 }
 
 static const JSMallocFunctions def_malloc_funcs = {
@@ -2074,7 +2102,11 @@ static const JSMallocFunctions def_malloc_funcs = {
     js_def_malloc,
     js_def_free,
     js_def_realloc,
+#ifdef CONFIG_PAL
+    pal_malloc_usable_size,
+#else
     js__malloc_usable_size
+#endif
 };
 
 JSRuntime *JS_NewRuntime(void)
@@ -25386,6 +25418,18 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
         emit_op(s, OP_add_brand);
     }
 
+    if (class_name != JS_ATOM_NULL) {
+        /* store the class name in the scoped class name variable (it
+           is independent from the class statement variable
+           definition). This must be done before the static fields are
+           initialized so that static field initializers can reference
+           the class by its own name (e.g. `static y = Foo.x;`). */
+        emit_op(s, OP_dup);
+        emit_op(s, OP_scope_put_var_init);
+        emit_atom(s, class_name);
+        emit_u16(s, fd->scope_level);
+    }
+
     /* initialize the static fields */
     if (class_fields[1].fields_init_fd != NULL) {
         ClassFieldsDef *cf = &class_fields[1];
@@ -25396,15 +25440,6 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
         emit_op(s, OP_drop);
     }
 
-    if (class_name != JS_ATOM_NULL) {
-        /* store the class name in the scoped class name variable (it
-           is independent from the class statement variable
-           definition) */
-        emit_op(s, OP_dup);
-        emit_op(s, OP_scope_put_var_init);
-        emit_atom(s, class_name);
-        emit_u16(s, fd->scope_level);
-    }
     pop_scope(s);
     pop_scope(s);
 
@@ -47941,7 +47976,9 @@ static const JSCFunctionListEntry js_math_obj[] = {
 /* OS dependent. d = argv[0] is in ms from 1970. Return the difference
    between UTC time and local time 'd' in minutes */
 static int getTimezoneOffset(int64_t time) {
-#if defined(_WIN32)
+#ifdef CONFIG_PAL
+    return -pal_gettimezoneoffset(time, true) / 60;
+#elif defined(_WIN32)
     DWORD r;
     TIME_ZONE_INFORMATION t;
     r = GetTimeZoneInformation(&t);

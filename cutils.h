@@ -88,6 +88,10 @@ extern "C" {
 #  define __maybe_unused __attribute__((unused))
 #endif
 
+#ifdef CONFIG_PAL
+#include "pal-port.h"
+#endif
+
 #ifndef offsetof
 #define offsetof(type, field) ((size_t) &((type *)0)->field)
 #endif
