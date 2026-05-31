@@ -23337,6 +23337,18 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
     /* drop the prototype */
     emit_op(s, OP_drop);
 
+    if (class_name != JS_ATOM_NULL) {
+        /* store the class name in the scoped class name variable (it
+           is independent from the class statement variable
+           definition). This must be done before the static fields are
+           initialized so that static field initializers can reference
+           the class by its own name (e.g. `static y = Foo.x;`). */
+        emit_op(s, OP_dup);
+        emit_op(s, OP_scope_put_var_init);
+        emit_atom(s, class_name);
+        emit_u16(s, fd->scope_level);
+    }
+
     /* initialize the static fields */
     if (class_fields[1].fields_init_fd != NULL) {
         ClassFieldsDef *cf = &class_fields[1];
@@ -23347,15 +23359,6 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
         emit_op(s, OP_drop);
     }
 
-    if (class_name != JS_ATOM_NULL) {
-        /* store the class name in the scoped class name variable (it
-           is independent from the class statement variable
-           definition) */
-        emit_op(s, OP_dup);
-        emit_op(s, OP_scope_put_var_init);
-        emit_atom(s, class_name);
-        emit_u16(s, fd->scope_level);
-    }
     pop_scope(s);
     pop_scope(s);
 
